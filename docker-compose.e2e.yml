@@ -1,0 +1,51 @@
+services:
+  db:
+    environment:
+      POSTGRES_USER: mist
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: mist_e2e
+    volumes: !override ["e2e-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mist -d mist_e2e"]
+  api:
+    ports: !override ["127.0.0.1:18000:8000"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://mist:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/mist_e2e
+  worker:
+    environment:
+      DATABASE_URL: postgresql+psycopg://mist:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/mist_e2e
+  e2e-reset:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    profiles: ["e2e"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://mist:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/mist_e2e
+      SEED_PASSWORD: ${SEED_PASSWORD:?Set SEED_PASSWORD in .env}
+      MIST_E2E_RESET: '1'
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -c 'alembic upgrade head && python -m mist.reset_e2e'
+  web:
+    ports: !override ["127.0.0.1:15173:80"]
+  e2e:
+    image: mcr.microsoft.com/playwright:v1.63.0-noble
+    profiles: ["e2e"]
+    working_dir: /app
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+      - ./sample-data:/sample-data:ro
+    environment:
+      BASE_URL: http://web
+      SAMPLE_DATA: /sample-data
+      SEED_PASSWORD: ${SEED_PASSWORD:?Set SEED_PASSWORD in .env}
+    depends_on:
+      web:
+        condition: service_healthy
+      worker:
+        condition: service_healthy
+    command: sh -c 'npm ci && npm run test:e2e'
+volumes:
+  e2e-data:

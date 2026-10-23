@@ -1,0 +1,10 @@
+.git
+.env
+docs/
+*.db
+*.sqlite*
+**/node_modules
+**/dist
+**/__pycache__
+**/.pytest_cache
+**/test-results

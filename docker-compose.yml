@@ -1,0 +1,84 @@
+name: mist-deck
+x-api: &api
+  build:
+    context: .
+    dockerfile: apps/api/Dockerfile
+  environment: &env
+    DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mist}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-mist}
+    SEED_PASSWORD: ${SEED_PASSWORD:?Set SEED_PASSWORD in .env}
+    COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    IMPORT_MAX_BYTES: ${IMPORT_MAX_BYTES:-2097152}
+    IMPORT_MAX_ROWS: ${IMPORT_MAX_ROWS:-5000}
+  depends_on:
+    db:
+      condition: service_healthy
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mist}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-mist}
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mist} -d ${POSTGRES_DB:-mist}"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  api:
+    <<: *api
+    command: sh -c 'alembic upgrade head && python -m mist.seed && uvicorn mist.main:app --host 0.0.0.0 --port 8000'
+    ports: ["127.0.0.1:${API_PORT:-8008}:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  worker:
+    <<: *api
+    command: python -m mist.worker
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  web:
+    build:
+      context: apps/web
+    ports: ["127.0.0.1:${WEB_PORT:-5180}:80"]
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  test:
+    <<: *api
+    profiles: ["test"]
+    environment:
+      <<: *env
+      DATABASE_URL: postgresql+psycopg://mist:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db-test:5432/mist_test
+    depends_on:
+      db-test:
+        condition: service_healthy
+    command: sh -c 'alembic upgrade head && pytest -q'
+  db-test:
+    image: postgres:16-alpine
+    profiles: ["test"]
+    environment:
+      POSTGRES_USER: mist
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: mist_test
+    tmpfs: [/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mist -d mist_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  postgres-data:

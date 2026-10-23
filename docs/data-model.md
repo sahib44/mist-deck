@@ -1,0 +1,90 @@
+# Data model
+
+All entity records use UUID primary keys and timezone-aware UTC created/updated
+timestamps. HTTP serialization uses ISO 8601; the browser displays local time.
+Normalized email fields and filter/sort fields have database indexes. JSON values
+use PostgreSQL JSONB. Association tables use composite primary keys.
+
+```mermaid
+erDiagram
+  users ||--o{ sessions : authenticates
+  users ||--o{ audit_events : performs
+  judge_contacts ||--o{ judge_qualifications : has
+  qualification_tags ||--o{ judge_qualifications : classifies
+  judge_contacts ||--o{ judge_category_eligibility : eligible
+  competition_categories ||--o{ judge_category_eligibility : classifies
+  judge_contacts ||--o{ judge_engagements : served
+  import_batches ||--o{ import_rows : contains
+  import_rows ||--o{ duplicate_candidates : matches
+  import_rows ||--o{ contact_merge_events : contributes
+  judge_contacts ||--o{ contact_merge_events : survives
+  campaigns ||--o{ campaign_recipients : targets
+  judge_contacts ||--o{ campaign_recipients : receives
+  campaign_recipients ||--o| outbound_messages : queues
+  committees ||--o{ tickets : owns
+  users ||--o{ tickets : assigned
+  tickets ||--o{ ticket_messages : conversation
+  tickets ||--o{ ticket_internal_notes : private
+  tickets ||--o{ outbound_messages : replies
+```
+
+## Identity and duplicate matching
+
+Email normalization trims whitespace and lowercases. Dots and `+tag` aliases are
+never removed. Addresses are syntactically checked without DNS/network requests
+and must match a reserved example domain. Name/organization comparison applies
+Unicode NFKC and case folding, replaces punctuation with spaces, and collapses
+whitespace. Displayed values preserve punctuation and case.
+
+Ordered deterministic levels:
+
+1. Primary email match: 1.00 confidence.
+2. Primary/alternate/preserved address overlap: 0.98.
+3. Normalized full name and nonempty organization match: 0.85.
+4. Name similarity at least 0.82 with matching nonempty organization: 0.72.
+5. Similar name alone: 0.35, advisory only.
+
+Each candidate stores its type, explanation, score, incoming row, and existing
+contact or earlier import row. No match auto-merges. Strong/possible matches
+block commit until explicitly resolved. Advisory name-only matches may be kept
+separate by committing; that choice is stored as `kept_separate`.
+
+## Merge semantics
+
+Scalar decisions select existing/incoming values. Missing existing values may be
+filled from incoming data. Unique qualification/category names, years and notes
+are combined. Do-not-contact uses logical OR to preserve suppression. Every
+primary/alternate address is kept in the two displayed fields or preserved-email
+array. All original scalar alternatives remain in the complete before snapshot.
+
+A merge event stores both input snapshots, the after snapshot, actor, timestamp,
+source import row or prior judge, and per-field decisions. Existing-contact merges
+retain the source record as a suppressed tombstone, reparent engagements, union
+relationships and relationship notes, and keep historical campaign recipients
+attached to their immutable source. Judge history includes retained source IDs;
+subsequent merges reparent tombstones. Foreign keys prevent orphaned records.
+Ticket requester identity is independent of judge contacts; there is no implicit
+email-based ticket/contact link that could expose private content.
+
+## Imports
+
+Batches preserve filename, encoding/delimiter/headers/size, mapping, status and
+summary counts. Rows retain original and normalized JSON plus line number,
+validation errors and resolution. Invalid rows count as skipped at commit.
+Per-row savepoints permit validation failures without losing other valid rows;
+unexpected database errors roll back the batch rather than hiding corruption.
+
+## Delivery
+
+A campaign recipient is unique within a campaign by both judge ID and normalized
+email. Outbound messages have a unique idempotency key, a unique optional campaign
+recipient foreign key, and a unique mock receipt. A message contains one address,
+not To/Cc/Bcc collections. Ticket reply request IDs form idempotency keys.
+
+## Retention
+
+No destructive purge is exposed. Imports, merge snapshots, suppression flags,
+audit events, tickets and mock messages stay in the local database volume. This
+supports reproducible testing; it is not a production retention policy. Real-data
+use would need separate deletion/anonymization, export, retention, backup and
+access-review rules. Do not add real personal data to this MVP.

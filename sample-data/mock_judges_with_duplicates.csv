@@ -1,0 +1,11 @@
+first_name,last_name,display_name,primary_email,alternate_email,organization,job_title,qualifications,categories,years,status,notes,do_not_contact
+Fable01,Quill01,Fable01 Quill01,JUDGE01@EXAMPLE.COM,alias01@example.org,Imaginary Studio 01,Fictional Educator,Arts;Writing,Visual Arts;Creative Writing,2023;2025,prospective,Fabricated test record,false
+Fable02,Quill02,Fable02 Quill02, judge02@example.com ,alias02@example.org,Imaginary Studio 02,Fictional Educator,Writing,Creative Writing,2024;2025,interested,Fabricated test record,false
+Fable03,Quill03,Fable03 Quill03,judge03@example.com,alias03@example.org,Imaginary Updated Studio,Updated Fictional Director,Public Speaking,Debate,2025;2025,confirmed,Fabricated test record,false
+Fable04,Quill04,Fable04 Quill04,alias04@example.org,,Imaginary Studio 04,Fictional Educator,Science,Science,2022;2025,contacted,Fabricated test record,false
+Fable05,Quill05,Fable05 Quill05,new05@example.net,,Imaginary Studio 05,Fictional Educator,Arts;Writing,Visual Arts;Creative Writing,2023;2025,prospective,Fabricated test record,false
+Fable06,Quil06,Fable06 Quil06,new06@example.net,,Imaginary Studio 06,Fictional Educator,Writing,Creative Writing,2024;2025,interested,Fabricated test record,false
+Fable07,Quill07,Fable07 Quill07,different07@example.net,,Different Imaginary Studio,Fictional Educator,Public Speaking,Debate,2025;2025,confirmed,Fabricated test record,false
+Fable08,Quill08,Fable08 Quill08,invalid-address,alias08@example.org,Imaginary Studio 08,Fictional Educator,Science,Science,2022;2025,contacted,Fabricated test record,false
+,,,,,,,,,,,,
+Novel,Testperson,Novel Testperson,novel@example.org,,Fictional New Studio,Fictional Educator,Arts;Writing,Visual Arts;Creative Writing,2023;2025,prospective,Fabricated test record,false
