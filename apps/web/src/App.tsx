@@ -22,6 +22,10 @@ import {
   LogOut,
   ShieldCheck,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -39,31 +43,39 @@ const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
 });
-function Login() {
+type Theme = "light" | "dark";
+function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      className="theme-toggle"
+      aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+      aria-pressed={theme === "dark"}
+      title={theme === "dark" ? "Light mode" : "Dark mode"}
+      onClick={onToggle}
+    >
+      {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+    </button>
+  );
+}
+function Login({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
   const action = useAction();
   const navigate = useNavigate();
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: "competitions@example.com", password: "" },
+    defaultValues: { email: "", password: "" },
   });
   return (
     <div className="login-page">
-      <div className="login-brand">
-        <div className="brand-symbol">M</div>
-        <h1>MIST Deck</h1>
-        <p>
-          A shared place for the people
-          <br />
-          who make MIST happen.
-        </p>
-        <span>JUDGES · OUTREACH · SUPPORT</span>
+      <div className="login-theme-toggle">
+        <ThemeToggle theme={theme} onToggle={onToggleTheme} />
       </div>
-      <main className="login-form">
-        <div className="sandbox">
-          <ShieldCheck size={16} /> SANDBOX EMAIL MODE
+      <main className="login-card">
+        <div className="login-identity">
+          <div className="brand-symbol">M</div>
+          <h1>MIST Deck</h1>
         </div>
-        <h2>Welcome to your workspace.</h2>
-        <p>Sign in with a development account.</p>
+        <h2>Sign in</h2>
         <form
           onSubmit={form.handleSubmit(async (values) => {
             try {
@@ -92,26 +104,34 @@ function Login() {
             }
           />
           <button className="primary" disabled={action.isPending}>
-            Sign in to MIST Deck
+            Sign in
           </button>
         </form>
-        <p className="caption">
-          All contacts are fabricated. Messages stay in the local sandbox.
-        </p>
       </main>
     </div>
   );
 }
-const nav = [
-  ["/dashboard", "Overview", LayoutDashboard, ""],
-  ["/judges", "Judge directory", Users, "judges"],
-  ["/imports", "Imports", Upload, "imports"],
-  ["/duplicates", "Duplicate review", Copy, "imports"],
-  ["/saved-lists", "Saved lists", Bookmark, "judges"],
-  ["/campaigns", "Campaigns", Send, "campaigns"],
-  ["/outbox", "Sandbox outbox", Inbox, "outbox"],
-  ["/tickets", "Support desk", LifeBuoy, "tickets"],
-  ["/audit", "Audit trail", History, "audit"],
+const navGroups = [
+  { label: "Workspace", items: [["/dashboard", "Overview", LayoutDashboard, ""]] },
+  {
+    label: "Judge handling",
+    items: [
+      ["/judges", "Judge directory", Users, "judges"],
+      ["/imports", "Imports", Upload, "imports"],
+      ["/duplicates", "Duplicate review", Copy, "imports"],
+      ["/saved-lists", "Saved lists", Bookmark, "judges"],
+      ["/campaigns", "Campaigns", Send, "campaigns"],
+      ["/outbox", "Sandbox outbox", Inbox, "outbox"],
+    ],
+  },
+  { label: "Competitor tickets", items: [["/tickets", "Tickets", LifeBuoy, "tickets"]] },
+  {
+    label: "Administration",
+    items: [
+      ["/audit", "Audit trail", History, "audit"],
+      ["/settings/categories", "Settings", Settings, "catalogs"],
+    ],
+  },
 ] as const;
 function Guard({
   permission,
@@ -166,11 +186,25 @@ export default function App() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [menu, setMenu] = useState(false);
+  const [collapsed, setCollapsed] = useState(
+    () => window.localStorage.getItem("mist-sidebar-collapsed") === "true",
+  );
+  const [theme, setTheme] = useState<Theme>(() =>
+    window.localStorage.getItem("mist-theme") === "dark" ? "dark" : "light",
+  );
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("mist-theme", theme);
+  }, [theme]);
+  useEffect(() => {
+    window.localStorage.setItem("mist-sidebar-collapsed", String(collapsed));
+  }, [collapsed]);
+  const toggleTheme = () => setTheme((current) => current === "dark" ? "light" : "dark");
   if (auth.isPending) return <Loading />;
   if (!auth.data || auth.error)
     return (
       <Routes>
-        <Route path="/login" element={<Login />} />
+        <Route path="/login" element={<Login theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -178,44 +212,59 @@ export default function App() {
   return (
     <Auth.Provider value={user}>
       <BackgroundNotice />
-      <div className="app">
-        <aside className={menu ? "sidebar open" : "sidebar"}>
-          <Link to="/dashboard" className="brand">
-            <span className="brand-symbol">M</span>
-            <span>
-              MIST Deck<small>NEW JERSEY</small>
-            </span>
-          </Link>
+      <div className={collapsed ? "app sidebar-collapsed" : "app"}>
+        <aside className={`${menu ? "sidebar open" : "sidebar"}${collapsed ? " collapsed" : ""}`}>
+          <div className="sidebar-header">
+            <Link to="/dashboard" className="brand" title="MIST Deck">
+              <span className="brand-symbol">M</span>
+              <span className="brand-copy">MIST Deck</span>
+            </Link>
+            <button
+              type="button"
+              className="collapse-button"
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-expanded={!collapsed}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              onClick={() => setCollapsed((value) => !value)}
+            >
+              {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            </button>
+          </div>
           <button className="mobile-close" onClick={() => setMenu(false)}>
             Close navigation
           </button>
-          <div className="nav-label">WORKSPACE</div>
-          <nav>
-            {nav
-              .filter(
-                (n) =>
-                  !n[3] ||
-                  can(user, n[3]) ||
-                  (n[1] === "Judge directory" && can(user, "imports")),
-              )
-              .map(([path, name, Icon]) => (
-                <NavLink onClick={() => setMenu(false)} key={path} to={path}>
-                  <Icon size={18} />
-                  {name}
-                </NavLink>
-              ))}
-          </nav>
+          <div className="sidebar-navigation">
+            {navGroups.map((group) => {
+              const items = group.items.filter(
+                ([, name, , permission]) =>
+                  !permission ||
+                  can(user, permission) ||
+                  (name === "Judge directory" && can(user, "imports")),
+              );
+              if (!items.length) return null;
+              return (
+                <nav className="nav-group" aria-label={group.label} key={group.label}>
+                  <div className="nav-label">{group.label}</div>
+                  {items.map(([path, name, Icon]) => (
+                    <NavLink
+                      onClick={() => setMenu(false)}
+                      key={path}
+                      to={path}
+                      title={name}
+                      aria-label={name}
+                    >
+                      <Icon size={18} />
+                      <span className="nav-text">{name}</span>
+                    </NavLink>
+                  ))}
+                </nav>
+              );
+            })}
+          </div>
           <div className="sidebar-bottom">
-            {can(user, "catalogs") && (
-              <NavLink to="/settings/categories">
-                <Settings size={18} /> Settings
-              </NavLink>
-            )}
             <div className="workspace-tag">
               <span className="avatar">NJ</span>
-              <div>
-                MIST NJ<small>Local development workspace</small>
-              </div>
+              <div className="workspace-copy">MIST NJ</div>
             </div>
           </div>
         </aside>
@@ -256,6 +305,7 @@ export default function App() {
             <div className="sandbox">
               <ShieldCheck size={15} /> SANDBOX EMAIL MODE
             </div>
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <div className="user">
               <span className="avatar">
                 {user.full_name

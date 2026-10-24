@@ -21,83 +21,87 @@ export function Dashboard() {
   if (query.isPending) return <Loading />;
   if (query.error) return <ErrorBox error={query.error} />;
   const data = query.data;
+  const judgeMetrics = data.metrics.filter((m: any) => !m.link.startsWith("/tickets"));
+  const ticketMetrics = data.metrics.filter((m: any) => m.link.startsWith("/tickets"));
+  const judgeGroups = Object.entries(data.groups).filter(([name]) => !name.startsWith("Tickets"));
+  const ticketGroups = Object.entries(data.groups).filter(([name]) => name.startsWith("Tickets"));
+  const metrics = (items: any[]) => (
+    <div className="metrics">
+      {items.map((m) => (
+        <Link key={m.label} to={m.link} className="metric">
+          <span>
+            {m.label}
+            <ArrowUpRight size={17} />
+          </span>
+          <strong>{m.value}</strong>
+          <small>View records</small>
+        </Link>
+      ))}
+    </div>
+  );
+  const groups = (items: [string, unknown][]) => (
+    <div className="two-col">
+      {items.map(([name, values]) => (
+        <Panel key={name} title={name}>
+          {(values as any[]).length ? (
+            (values as any[]).map((v) => (
+              <Link className="stat-row" key={v.label} to={v.link}>
+                <span>{label(v.label)}</span>
+                <strong>{v.value}</strong>
+                <ArrowUpRight size={15} />
+              </Link>
+            ))
+          ) : (
+            <Empty />
+          )}
+        </Panel>
+      ))}
+    </div>
+  );
   return (
     <>
-      <Heading
-        eyebrow="YOUR WORKSPACE AT A GLANCE"
-        title="Operations overview"
-        description="The people, conversations, and next steps that need your attention."
-      >
-        {can(user, "tickets") && user?.role !== "support_staff" && (
-          <Link className="button" to="/tickets/new">
-            <Plus size={16} /> New ticket
-          </Link>
-        )}
-        {can(user, "campaigns") && (
-          <Link className="button primary" to="/campaigns/new">
-            <Plus size={16} /> Create campaign
-          </Link>
-        )}
-      </Heading>
-      <div className="overview-banner">
-        <div>
-          <span className="eyebrow">MIST NJ · ORGANIZER WORKSPACE</span>
-          <h2>A clearer view of what’s next.</h2>
-          <p>Keep judge outreach and competitor support moving together.</p>
-        </div>
-        <div className="banner-mark">
-          <ShieldCheck size={30} />
-          <span>
-            Every message stays
-            <br />
-            inside your sandbox.
-          </span>
-        </div>
-      </div>
-      <div className="metrics">
-        {data.metrics.map((m: any) => (
-          <Link key={m.label} to={m.link} className="metric">
-            <span>
-              {m.label}
-              <ArrowUpRight size={17} />
-            </span>
-            <strong>{m.value}</strong>
-            <small>View records</small>
-          </Link>
-        ))}
-      </div>
-      <div className="two-col">
-        {Object.entries(data.groups).map(([name, values]) => (
-          <Panel key={name} title={name}>
-            {(values as any[]).length ? (
-              (values as any[]).map((v) => (
-                <Link className="stat-row" key={v.label} to={v.link}>
-                  <span>{label(v.label)}</span>
-                  <strong>{v.value}</strong>
-                  <ArrowUpRight size={15} />
-                </Link>
-              ))
-            ) : (
-              <Empty />
+      <Heading title="Operations overview" eyebrow="WORKSPACE" />
+      {(judgeMetrics.length > 0 || judgeGroups.length > 0) && (
+        <section className="overview-section" aria-labelledby="judge-overview-heading">
+          <div className="section-heading">
+            <h2 id="judge-overview-heading">Judge handling</h2>
+            {can(user, "campaigns") && (
+              <Link className="button primary" to="/campaigns/new">
+                <Plus size={16} /> Create campaign
+              </Link>
             )}
-          </Panel>
-        ))}
-      </div>
-      {data.latest_import && (
-        <Panel
-          title="Latest import"
-          action={
-            <Link to={"/imports/" + data.latest_import.id}>View import →</Link>
-          }
-        >
-          <div className="summary-strip">
-            <strong>{data.latest_import.filename}</strong>
-            <Badge value={data.latest_import.status} />
-            <span>{data.latest_import.created_count} created</span>
-            <span>{data.latest_import.updated_count} updated</span>
-            <span>{data.latest_import.skipped_count} skipped</span>
           </div>
-        </Panel>
+          {metrics(judgeMetrics)}
+          {groups(judgeGroups)}
+          {data.latest_import && (
+            <Panel
+              title="Latest import"
+              action={<Link to={"/imports/" + data.latest_import.id}>View import →</Link>}
+            >
+              <div className="summary-strip">
+                <strong>{data.latest_import.filename}</strong>
+                <Badge value={data.latest_import.status} />
+                <span>{data.latest_import.created_count} created</span>
+                <span>{data.latest_import.updated_count} updated</span>
+                <span>{data.latest_import.skipped_count} skipped</span>
+              </div>
+            </Panel>
+          )}
+        </section>
+      )}
+      {(ticketMetrics.length > 0 || ticketGroups.length > 0) && (
+        <section className="overview-section" aria-labelledby="ticket-overview-heading">
+          <div className="section-heading">
+            <h2 id="ticket-overview-heading">Competitor tickets</h2>
+            {can(user, "tickets") && user?.role !== "support_staff" && (
+              <Link className="button" to="/tickets/new">
+                <Plus size={16} /> New ticket
+              </Link>
+            )}
+          </div>
+          {metrics(ticketMetrics)}
+          {groups(ticketGroups)}
+        </section>
       )}
       {can(user, "audit") && (
         <Panel

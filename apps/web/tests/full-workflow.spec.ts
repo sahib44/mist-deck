@@ -14,12 +14,23 @@ test("organizer imports, reviews, campaigns, and resolves a support ticket", asy
     await page.goto("/login");
     await page.getByLabel("Email", { exact: true }).fill(email);
     await page.getByLabel("Password", { exact: true }).fill(password);
-    await page.getByRole("button", { name: "Sign in to MIST Deck" }).click();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "Operations overview" }),
     ).toBeVisible();
   };
   await login("competitions@example.com");
+  await expect(page.getByRole("navigation", { name: "Judge handling" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Competitor tickets" })).toBeVisible();
+  await page.getByRole("button", { name: "Switch to dark mode" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(page.locator(".app")).toHaveClass(/sidebar-collapsed/);
+  await page.getByRole("button", { name: "Expand sidebar" }).click();
+  await expect(page.locator(".app")).not.toHaveClass(/sidebar-collapsed/);
   await expect(
     page.getByText("SANDBOX EMAIL MODE", { exact: true }),
   ).toBeVisible();
