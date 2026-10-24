@@ -10,13 +10,15 @@ adopted it, and it has no real users or production deployment. The included
 names, organizations, and addresses are fabricated. Campaign delivery writes
 only to a local sandbox outbox; it does not send email.
 
-The prototype currently supports role-based sign-in, a searchable judge directory,
-CSV column mapping and duplicate merge review, saved lists, campaign preview and
-approval, a PostgreSQL-backed sandbox worker, support tickets with private notes,
-dashboard metrics, and an audit trail.
+The prototype currently supports role-based sign-in, a competition-based judge directory,
+CSV column mapping and duplicate merge review, saved lists, competition
+workspaces, campaign preview and approval, a PostgreSQL-backed sandbox worker,
+support tickets with private notes, dashboard metrics, and an audit trail.
 
 **SANDBOX EMAIL MODE: no real email can be sent.** The only provider is a database
-mock. Addresses must use `example.com`, `example.org`, or `example.net`. There are
+mock. Contact records may hold syntactically valid addresses, but a queued pilot
+message produces only a local mock receipt. General campaigns and ticket replies
+still require `example.com`, `example.org`, or `example.net` addresses. There are
 no SMTP credentials, email provider SDKs, domain lookups, or tracking pixels.
 
 ## Start locally
@@ -55,7 +57,7 @@ local `.env` file:
 Passwords are stored as Argon2id hashes. Login creates a random, 12-hour HttpOnly,
 SameSite=Strict cookie; only its SHA-256 digest is stored. Mutation requests require
 an application-specific header and the API exposes no permissive CORS policy.
-A director can change roles and optional grants under Settings → Users.
+The former Settings catalog screen has been removed from the organizer interface.
 
 ## Configuration
 
@@ -86,7 +88,8 @@ docker compose run --rm api python -m mist.seed
 ```
 
 Seeding is idempotent when user records already exist. It creates four organizers,
-shared categories and qualifications, committees, and 24 fabricated judge contacts.
+shared categories and qualifications, committees, permanent 2027 competition
+workspaces plus the Culinary Arts pilot, and 24 fabricated judge contacts.
 No tickets or delivered messages are fabricated as metrics; create them through
 the working workflows.
 
@@ -99,7 +102,9 @@ the working workflows.
    keep separate, or skip. Low-confidence name-only suggestions never auto-merge.
 5. Return to the import, continue to commit, check the confirmation, and commit.
    Invalid rows remain downloadable in the error CSV.
-6. Filter Judge directory by **Arts**, then Save list.
+6. Open Judge directory to review competition, response, contact, and written
+   qualification. Export the current view as a spreadsheet-ready CSV. Open
+   **Contact tools** to use legacy contact filters and save a dynamic list.
 7. Open the saved list and create a campaign. Preview each recipient, submit,
    approve, and queue. The seeded competitions account has the approval grant.
 8. Watch separate messages appear in Sandbox outbox. No message has multiple
@@ -111,6 +116,53 @@ the working workflows.
 A director may cancel any nonterminal campaign, including queued/sending work;
 remaining messages will not be delivered. Approvals and previews are immutable
 once a campaign is created; compose a new draft to change content or recipients.
+
+## Competition workflow
+
+Under Judge handling, open **Competitions** and choose a category. The 2027
+sandbox includes fixed competitions transcribed from the historic nomination
+sheet. Arts includes 2D Art, 3D Art, Fashion Design, Digital Art, Photography,
+and Extemporaneous Drawing. Culinary Arts is the seeded pilot. Fixed
+competitions cannot be deleted through the API, regardless of role.
+
+Choose **Add pilot competition** inside a category to create another one. Enter
+its name and year; rules and procedures PDFs or DOCX files and existing judges
+are optional. Inside any competition, use **Add judge** to create a
+contact with a name and at least an email or phone, plus an optional written
+reason the person is qualified,
+or attach an existing directory contact. A contact can belong to multiple pilots;
+its response is tracked separately in each one.
+
+Move each judge among **To contact**, **Awaiting response**, **Accepted**, and
+**Declined**. Filter by status or **Waiting 7+ days**, then select visible judges
+and choose **Email selected**. Only contacts with email who have not declined or
+opted out are eligible. The compose page creates an individual preview and mock
+outbox record for each selected judge after approval and queueing. Once the mock
+worker completes a pilot message, it moves a **To contact** judge to **Awaiting
+response** and resets the seven-day follow-up clock for someone already waiting.
+This is workflow state within the prototype, not proof of delivery to an inbox.
+For outreach outside the app, an organizer can change the status manually. A pilot
+can be deleted after three confirmation steps, including an exact name entry.
+It disappears from normal competition views while its deletion, actor, and
+historical campaign links remain in the local audit/database records.
+Open **Competitions → Deleted pilots** to see the deletion date and organizer.
+Uploaded documents are stored in the local database and are accessible only to
+signed-in users with judge access. Keep any real contact information or private
+rules out of commits, screenshots, and issue reports.
+
+The Judge directory shows one row per competition assignment, with its own
+response. Unassigned contacts remain visible. Its **Export sheet** control
+downloads the filtered view as CSV, grouped by main category and competition;
+within each competition, rows follow the order judges were added. Columns are
+main category, competition, response, name, contact, qualification, year, and
+added date. CSV is spreadsheet-ready but does not create separate workbook tabs.
+
+Campaign drafts can hold up to five PDF, DOCX, PNG, JPG, TXT, or CSV attachments
+of 5 MB each. Attachments can be added or removed before submission, then appear
+with each individual sandbox outbox message. A sent sandbox message can be
+forwarded from the outbox to a specified address, including a registration-team
+address; it carries the original body and attachments. Forwarding creates another
+mock outbox record and sends no external email.
 
 ## Sample CSV expectations
 
@@ -188,8 +240,9 @@ Full browser scenario uses a separate Compose project and database volume:
 
 The test-only app is at http://localhost:15173. Run all layers with
 `./scripts/test.sh`. Browser traces/reports go under `apps/web/test-results` and
-`apps/web/playwright-report`. The scenario exercises the complete CSV → duplicate
-review → dynamic list → campaign approval → worker → outbox → ticket → audit flow.
+`apps/web/playwright-report`. The browser scenarios exercise the CSV → duplicate
+review → dynamic list → campaign approval → worker → outbox → ticket → audit flow
+and the competition category → judge response → filtered selection → sandbox flow.
 The runner resets only its dedicated `mist_e2e` database before each run. It
 requires both the exact database name and an explicit test-reset environment flag.
 The main workspace database is never reset by these tests. Stop the test stack:
@@ -215,7 +268,11 @@ the `mist` package under `apps/api`; do not duplicate models in `apps/worker`.
 
 - Frontend application and route screens: `apps/web/src/`.
 - Frontend component and browser tests: `apps/web/src/workflows.test.tsx` and
-  `apps/web/tests/full-workflow.spec.ts`.
+  `apps/web/tests/`.
+- Competition screens: `apps/web/src/Pilots.tsx`; directory screen:
+  `apps/web/src/JudgeDirectory.tsx`; competition and directory APIs:
+  `apps/api/mist/competition_catalog.py`, `apps/api/mist/pilots.py`, and
+  `apps/api/mist/directory.py`.
 - FastAPI routes, services, models, seed, and worker: `apps/api/mist/`.
 - Backend tests and migrations: `apps/api/tests/` and `apps/api/migrations/`.
 - Local orchestration: `docker-compose.yml`; fabricated import files: `sample-data/`.
@@ -230,15 +287,22 @@ the `mist` package under `apps/api`; do not duplicate models in `apps/worker`.
 - Database-backed metrics follow the current user's record visibility. Overdue
   means an open ticket has had no public message for more than three days.
 - The application is an MVP for local testing: no password-reset/SSO, production
-  account provisioning, attachment processing, rich-text editor, or real email.
+  account provisioning, rich-text editor, or real email.
+- Rules and procedures uploads are limited to 5 MB PDF/DOCX files. The prototype
+  has no malware scanning, document version history, or production retention policy.
+- The historical nominations sheet supplies only competition names for the
+  sandbox catalog. Its judge records are not imported; contact entry is manual.
 - Imports accept UTF-8 only; other encodings produce a clear conversion request.
 - The match engine is deterministic and bounded by import size, but compares rows
   against the active directory in memory. Very large deployments need indexed
   candidate generation. Directory/list views use paginated queries and batched
   relation fetches, not one query per displayed judge.
-- Catalog selectors show up to 100 entries; table views are paginated. Qualification
-  and category edits on contacts are additive to avoid silent history loss.
-- Campaign drafts are immutable; correction uses a new draft. Approval can be
+- Legacy catalog selectors show up to 100 entries; table views are paginated.
+  The organizer Settings catalog screen is no longer exposed. Older imported
+  qualification tags remain on contact records for compatibility; competition
+  assignments use a written qualification reason.
+- Campaign content and recipients are fixed after draft creation; attachments
+  can be changed while the draft is open. Approval can be
   performed by a permitted creator; separation of duties is not mandated in the
   prototype design.
 - Private ticket content is not exposed to a technology administrator unless a
@@ -259,8 +323,8 @@ not evidence of external deliverability.
 
 ## Verified local build
 
-The final run passed **25 backend tests, 7 frontend tests, and the full Playwright
-scenario**, plus TypeScript compilation, Docker startup and Alembic consistency.
+The final run passed **31 backend tests, 7 frontend tests, and 3 Playwright
+scenarios**, plus TypeScript compilation, Docker startup and Alembic consistency.
 See [validation details](docs/validation.md) and the
 [requirements map](docs/requirements-matrix.md).
 

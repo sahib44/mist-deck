@@ -101,7 +101,31 @@ class CampaignIn(Input):
     body_template: str = Field(min_length=1, max_length=30000)
     judge_ids: list[UUID] = Field(default_factory=list, max_length=5000)
     saved_list_id: UUID | None = None
+    pilot_competition_id: UUID | None = None
     variables: dict[str, str] = Field(default_factory=dict)
+
+
+class ForwardIn(Input):
+    recipient_email: str = Field(min_length=3, max_length=254)
+    note: str = Field(default="", max_length=5000)
+
+
+class PilotJudgeIn(Input):
+    name: str = Field(min_length=1, max_length=400)
+    email: str = Field(default="", max_length=254)
+    phone: str = Field(default="", max_length=50)
+    qualifications: str = Field(default="", max_length=2000)
+    existing_judge_id: UUID | None = None
+
+
+class PilotStatusIn(Input):
+    status: Literal["to_contact", "awaiting_response", "accepted", "declined"]
+
+
+class PilotDeleteIn(Input):
+    confirmed_first: bool
+    confirmed_second: bool
+    exact_name: str = Field(min_length=1, max_length=200)
 
 
 class TicketIn(Input):

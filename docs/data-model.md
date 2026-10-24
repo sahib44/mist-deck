@@ -14,13 +14,19 @@ erDiagram
   judge_contacts ||--o{ judge_category_eligibility : eligible
   competition_categories ||--o{ judge_category_eligibility : classifies
   judge_contacts ||--o{ judge_engagements : served
+  pilot_competitions ||--o{ pilot_nominations : contains
+  judge_contacts ||--o{ pilot_nominations : nominated
+  pilot_competitions ||--o{ pilot_documents : stores
+  pilot_competitions ||--o{ campaigns : scopes
   import_batches ||--o{ import_rows : contains
   import_rows ||--o{ duplicate_candidates : matches
   import_rows ||--o{ contact_merge_events : contributes
   judge_contacts ||--o{ contact_merge_events : survives
   campaigns ||--o{ campaign_recipients : targets
+  campaigns ||--o{ campaign_attachments : includes
   judge_contacts ||--o{ campaign_recipients : receives
   campaign_recipients ||--o| outbound_messages : queues
+  outbound_messages ||--o{ outbound_messages : forwards
   committees ||--o{ tickets : owns
   users ||--o{ tickets : assigned
   tickets ||--o{ ticket_messages : conversation
@@ -31,8 +37,10 @@ erDiagram
 ## Identity and duplicate matching
 
 Email normalization trims whitespace and lowercases. Dots and `+tag` aliases are
-never removed. Addresses are syntactically checked without DNS/network requests
-and must match a reserved example domain. Name/organization comparison applies
+never removed. Addresses are syntactically checked without DNS/network requests.
+Contact records may use real domains; general campaigns and ticket replies require
+reserved example domains. Pilot campaigns still write only mock receipts.
+Name/organization comparison applies
 Unicode NFKC and case folding, replaces punctuation with spaces, and collapses
 whitespace. Displayed values preserve punctuation and case.
 
@@ -81,10 +89,27 @@ email. Outbound messages have a unique idempotency key, a unique optional campai
 recipient foreign key, and a unique mock receipt. A message contains one address,
 not To/Cc/Bcc collections. Ticket reply request IDs form idempotency keys.
 
+Each pilot nomination links one contact to one pilot with its own response and
+last-contact date and written qualification reason. The optional rules and procedures documents are private
+database records, limited to one of each kind per pilot. Pilot campaigns retain
+their pilot ID, and selected recipients must belong to that pilot.
+
+Campaign attachments are private database records linked to a campaign draft.
+They become immutable when the campaign is submitted. The mock outbox exposes
+their names and authenticated downloads alongside each recipient message.
+Forwards reference the original outbox message, so they retain access to its
+attachments while receiving a new idempotency key and mock receipt.
+
+The competition workspace table also holds seeded permanent competitions.
+Each record has a category slug and an `is_pilot` flag. Only pilots can be
+soft-deleted; deletion records the actor and timestamp, preserves linked history,
+and excludes the pilot from ordinary lists and detail requests.
+
 ## Retention
 
 No destructive purge is exposed. Imports, merge snapshots, suppression flags,
-audit events, tickets and mock messages stay in the local database volume. This
+audit events, tickets, pilot documents and mock messages stay in the local database volume. This
 supports reproducible testing; it is not a production retention policy. Real-data
 use would need separate deletion/anonymization, export, retention, backup and
-access-review rules. Do not add real personal data to this MVP.
+access-review rules. Keep real personal data and private documents out of the
+public repository; assess local data handling before use with real records.

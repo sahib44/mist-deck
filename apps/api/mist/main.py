@@ -14,7 +14,7 @@ from . import schemas as s
 from .auth import current_user, require, allowed, login, fail
 from .services import *
 
-app = FastAPI(title="MIST Deck", version="1.0.0")
+app = FastAPI(title="MIST Deck", version="1.2.0")
 logger = logging.getLogger("mist")
 
 
@@ -447,11 +447,15 @@ from .imports import router as imports_router
 from .campaigns import router as campaigns_router
 from .tickets import router as tickets_router
 from .dashboard import router as dashboard_router
+from .pilots import router as pilots_router
+from .directory import router as directory_router
 
 app.include_router(imports_router)
 app.include_router(campaigns_router)
 app.include_router(tickets_router)
 app.include_router(dashboard_router)
+app.include_router(pilots_router)
+app.include_router(directory_router)
 
 
 @app.get("/api/system")

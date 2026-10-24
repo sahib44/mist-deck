@@ -96,7 +96,7 @@ test("organizer imports, reviews, campaigns, and resolves a support ticket", asy
   await expect(
     page.getByRole("heading", { name: "Import complete" }),
   ).toBeVisible();
-  await page.goto("/judges");
+  await page.goto("/contacts");
   await page.getByLabel("Qualification", { exact: true }).selectOption("Arts");
   await expect(page).toHaveURL(/qualification=Arts/);
   await page.getByRole("button", { name: "Save list", exact: true }).click();

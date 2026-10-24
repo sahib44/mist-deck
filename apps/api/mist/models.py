@@ -10,6 +10,8 @@ from sqlalchemy import (
     UniqueConstraint,
     Sequence,
     Float,
+    LargeBinary,
+    func,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -128,6 +130,52 @@ class Engagement(Record, Base):
     notes: Mapped[str] = mapped_column(Text, default="")
 
 
+class PilotCompetition(Record, Base):
+    __tablename__ = "pilot_competitions"
+    name: Mapped[str] = mapped_column(String(200))
+    event_year: Mapped[int] = mapped_column(Integer, index=True)
+    category_slug: Mapped[str] = mapped_column(String(80), index=True, default="group-projects")
+    is_pilot: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    deleted_at: Mapped[object | None] = mapped_column(DateTime(timezone=True))
+    deleted_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+
+
+Index(
+    "uq_active_competition_name_year",
+    func.lower(PilotCompetition.__table__.c.name),
+    PilotCompetition.__table__.c.event_year,
+    unique=True,
+    postgresql_where=PilotCompetition.__table__.c.deleted_at.is_(None),
+)
+
+
+class PilotNomination(Record, Base):
+    __tablename__ = "pilot_nominations"
+    pilot_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("pilot_competitions.id"), index=True
+    )
+    judge_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("judge_contacts.id"), index=True)
+    status: Mapped[str] = mapped_column(String(40), default="to_contact", index=True)
+    qualification_text: Mapped[str] = mapped_column(Text, default="")
+    last_contacted_at: Mapped[object | None] = mapped_column(DateTime(timezone=True))
+    responded_at: Mapped[object | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (UniqueConstraint("pilot_id", "judge_id"),)
+
+
+class PilotDocument(Record, Base):
+    __tablename__ = "pilot_documents"
+    pilot_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("pilot_competitions.id"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(20))
+    filename: Mapped[str] = mapped_column(String(255))
+    media_type: Mapped[str] = mapped_column(String(100))
+    content: Mapped[bytes] = mapped_column(LargeBinary)
+    uploaded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    __table_args__ = (UniqueConstraint("pilot_id", "kind"),)
+
+
 class ImportBatch(Record, Base):
     __tablename__ = "import_batches"
     filename: Mapped[str] = mapped_column(String(255))
@@ -213,6 +261,18 @@ class Campaign(Record, Base):
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     approved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     approved_at: Mapped[object | None] = mapped_column(DateTime(timezone=True))
+    pilot_competition_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("pilot_competitions.id"), index=True
+    )
+
+
+class CampaignAttachment(Record, Base):
+    __tablename__ = "campaign_attachments"
+    campaign_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("campaigns.id"), index=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    media_type: Mapped[str] = mapped_column(String(100))
+    content: Mapped[bytes] = mapped_column(LargeBinary)
+    uploaded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
 
 
 class Recipient(Record, Base):
@@ -276,6 +336,9 @@ class Outbound(Record, Base):
     )
     related_ticket_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("tickets.id"), index=True
+    )
+    forwarded_from_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("outbound_messages.id"), index=True
     )
     provider: Mapped[str] = mapped_column(String(30), default="mock")
     provider_message_id: Mapped[str | None] = mapped_column(String(100), unique=True)

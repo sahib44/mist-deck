@@ -1,13 +1,63 @@
-from uuid import UUID
-from fastapi import APIRouter, Depends, Query
+from uuid import UUID, uuid4
+from urllib.parse import quote
+import io
+import zipfile
+from fastapi import APIRouter, Depends, Query, File, UploadFile, Response
 from sqlalchemy import select, func
 from .db import get_db, now
 from .models import *
-from .schemas import CampaignIn, ObjectView, Page, Failure
+from .schemas import CampaignIn, ForwardIn, ObjectView, Page, Failure
 from .auth import require, current_user, allowed, fail
 from .services import *
 
 router = APIRouter(prefix="/api")
+MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
+MAX_CAMPAIGN_ATTACHMENTS = 5
+
+
+def attachment_type(name, content):
+    ext = name.lower().rsplit(".", 1)[-1]
+    if ext == "pdf" and content.startswith(b"%PDF-"):
+        return "application/pdf"
+    if ext == "png" and content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if ext in {"jpg", "jpeg"} and content.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if ext == "docx" and content.startswith(b"PK"):
+        try:
+            with zipfile.ZipFile(io.BytesIO(content)) as document:
+                names = document.namelist()
+                if "[Content_Types].xml" in names and not any("vbaProject" in x for x in names):
+                    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        except zipfile.BadZipFile:
+            pass
+    if ext in {"txt", "csv"}:
+        try:
+            content.decode("utf-8")
+            return "text/plain" if ext == "txt" else "text/csv"
+        except UnicodeDecodeError:
+            pass
+    fail("invalid_attachment", "Use a valid PDF, DOCX, PNG, JPG, TXT, or CSV file.")
+
+
+def attachments_for(db, campaign_id):
+    if not campaign_id:
+        return []
+    return [
+        {"id": str(file.id), "filename": file.filename, "media_type": file.media_type, "size": len(file.content)}
+        for file in db.scalars(select(CampaignAttachment).where(CampaignAttachment.campaign_id == campaign_id).order_by(CampaignAttachment.created_at))
+    ]
+
+
+def source_campaign_id(db, message):
+    seen = set()
+    while message and message.id not in seen:
+        seen.add(message.id)
+        if message.related_campaign_recipient_id:
+            recipient = db.get(Recipient, message.related_campaign_recipient_id)
+            return recipient.campaign_id if recipient else None
+        message = db.get(Outbound, message.forwarded_from_id) if message.forwarded_from_id else None
+    return None
 
 
 @router.get("/campaigns", response_model=Page)
@@ -30,6 +80,23 @@ def create(data: CampaignIn, user=Depends(require("campaigns")), db=Depends(get_
     render_template(data.body_template, {})
     if set(data.variables) - TEMPLATE_VARS:
         fail("unknown_template_variable", "Unsupported event variable.")
+    pilot = get(db, PilotCompetition, data.pilot_competition_id) if data.pilot_competition_id else None
+    if pilot and pilot.deleted_at:
+        fail("not_found", "Competition not found.", 404)
+    if pilot and data.saved_list_id:
+        fail("invalid_recipients", "Choose judges from the pilot, not a saved list.")
+    pilot_nominations = {}
+    if pilot:
+        pilot_nominations = {
+            n.judge_id: n for n in db.scalars(
+                select(PilotNomination).where(
+                    PilotNomination.pilot_id == pilot.id,
+                    PilotNomination.judge_id.in_(data.judge_ids),
+                )
+            )
+        }
+        if not data.judge_ids or len(pilot_nominations) != len(set(data.judge_ids)):
+            fail("invalid_recipients", "Select judges who belong to this pilot.")
     stmt = (
         judge_query(get(db, SavedList, data.saved_list_id).filter_definition)
         if data.saved_list_id
@@ -46,6 +113,7 @@ def create(data: CampaignIn, user=Depends(require("campaigns")), db=Depends(get_
         body_template=clean(data.body_template),
         variables=data.variables,
         created_by=user.id,
+        pilot_competition_id=pilot.id if pilot else None,
     )
     db.add(campaign)
     db.flush()
@@ -54,10 +122,15 @@ def create(data: CampaignIn, user=Depends(require("campaigns")), db=Depends(get_
         reason = ""
         if judge["do_not_contact"]:
             reason = "Do not contact"
+        if pilot and pilot_nominations[UUID(judge["id"])].status == "declined":
+            reason = "Declined this pilot"
         try:
-            address = safe_email(judge["primary_email"])
+            address = (
+                contact_email(judge["primary_email"])
+                if pilot else safe_email(judge["primary_email"])
+            )
         except Exception:
-            reason = "Missing or invalid sandbox email"
+            reason = "Missing or invalid email"
             address = ""
         if address in seen:
             reason = "Duplicate normalized email"
@@ -70,7 +143,7 @@ def create(data: CampaignIn, user=Depends(require("campaigns")), db=Depends(get_
             "judge_name": judge["display_name"],
             "first_name": judge["first_name"],
             "organization": judge["organization"],
-            "category_name": ", ".join(judge["categories"]),
+            "category_name": pilot.name if pilot else ", ".join(judge["categories"]),
         }
         db.add(
             Recipient(
@@ -84,7 +157,7 @@ def create(data: CampaignIn, user=Depends(require("campaigns")), db=Depends(get_
     if not seen:
         fail(
             "no_recipients",
-            "No eligible recipients with sandbox email addresses remain.",
+            "No eligible recipients with email addresses remain.",
         )
     audit(
         db,
@@ -110,7 +183,59 @@ def campaign(id: UUID, user=Depends(require("campaigns")), db=Depends(get_db)):
             .group_by(Recipient.status)
         ).all()
     )
+    result["attachments"] = attachments_for(db, id)
     return result
+
+
+@router.post("/campaigns/{id}/attachments", response_model=ObjectView)
+async def upload_campaign_attachment(
+    id: UUID,
+    file: UploadFile = File(...),
+    user=Depends(require("campaigns")),
+    db=Depends(get_db),
+):
+    campaign = get(db, Campaign, id, True)
+    if campaign.status != "draft":
+        fail("invalid_state", "Attachments can only be changed while the campaign is a draft.")
+    count = db.scalar(select(func.count()).select_from(CampaignAttachment).where(CampaignAttachment.campaign_id == id))
+    if count >= MAX_CAMPAIGN_ATTACHMENTS:
+        fail("attachment_limit", "A campaign can have at most five attachments.")
+    name = file.filename.replace("\\", "/").split("/")[-1].replace("\r", "").replace("\n", "")[:255] if file.filename else ""
+    content = await file.read(MAX_ATTACHMENT_BYTES + 1)
+    if not name or not content or len(content) > MAX_ATTACHMENT_BYTES:
+        fail("invalid_attachment", "Choose a nonempty file under 5 MB.")
+    media_type = attachment_type(name, content)
+    item = CampaignAttachment(campaign_id=id, filename=name, media_type=media_type, content=content, uploaded_by=user.id)
+    db.add(item)
+    audit(db, user, "campaign.attachment_added", campaign, f"Attached {name} to campaign")
+    db.commit()
+    return {"id": str(item.id), "filename": name, "media_type": media_type, "size": len(content)}
+
+
+@router.delete("/campaigns/{id}/attachments/{attachment_id}", response_model=ObjectView)
+def delete_campaign_attachment(id: UUID, attachment_id: UUID, user=Depends(require("campaigns")), db=Depends(get_db)):
+    campaign = get(db, Campaign, id, True)
+    if campaign.status != "draft":
+        fail("invalid_state", "Attachments can only be changed while the campaign is a draft.")
+    item = get(db, CampaignAttachment, attachment_id)
+    if item.campaign_id != id:
+        fail("not_found", "Attachment not found.", 404)
+    db.delete(item)
+    audit(db, user, "campaign.attachment_removed", campaign, f"Removed {item.filename} from campaign")
+    db.commit()
+    return {"id": str(attachment_id)}
+
+
+@router.get("/campaigns/{id}/attachments/{attachment_id}")
+def download_campaign_attachment(id: UUID, attachment_id: UUID, user=Depends(require("campaigns")), db=Depends(get_db)):
+    get(db, Campaign, id)
+    item = db.get(CampaignAttachment, attachment_id)
+    if not item or item.campaign_id != id:
+        fail("not_found", "Attachment not found.", 404)
+    return Response(
+        item.content, media_type=item.media_type,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(item.filename)}"},
+    )
 
 
 @router.get("/campaigns/{id}/preview", response_model=Page)
@@ -190,7 +315,10 @@ def transition(
                         "Contact is now suppressed or merged",
                     )
                     continue
-                safe_email(rec.recipient_email)
+                if campaign.pilot_competition_id:
+                    contact_email(rec.recipient_email)
+                else:
+                    safe_email(rec.recipient_email)
                 db.add(
                     Outbound(
                         recipient_email=rec.recipient_email,
@@ -272,7 +400,46 @@ def outbox(
         )
     if ticket_id:
         stmt = stmt.where(Outbound.related_ticket_id == ticket_id)
-    return page(db, stmt, page_no, page_size)
+    result = page(db, stmt, page_no, page_size)
+    for item in result["items"]:
+        item["attachments"] = attachments_for(db, source_campaign_id(db, db.get(Outbound, UUID(item["id"]))))
+    return result
+
+
+@router.get("/outbox/{id}/attachments/{attachment_id}")
+def download_outbox_attachment(id: UUID, attachment_id: UUID, user=Depends(require("outbox")), db=Depends(get_db)):
+    message = db.scalar(outbox_scope(user).where(Outbound.id == id))
+    if not message:
+        fail("not_found", "Message not found.", 404)
+    campaign_id = source_campaign_id(db, message)
+    item = db.get(CampaignAttachment, attachment_id)
+    if not item or item.campaign_id != campaign_id:
+        fail("not_found", "Attachment not found.", 404)
+    return Response(
+        item.content,
+        media_type=item.media_type,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(item.filename)}"},
+    )
+
+
+@router.post("/outbox/{id}/forward", response_model=ObjectView)
+def forward_message(id: UUID, data: ForwardIn, user=Depends(require("outbox")), db=Depends(get_db)):
+    original = db.scalar(outbox_scope(user).where(Outbound.id == id))
+    if not original or original.status != "sent":
+        fail("invalid_forward", "Only sent sandbox messages can be forwarded.", 400)
+    address = contact_email(data.recipient_email)
+    note = clean(data.note).strip()
+    subject = original.subject if original.subject.lower().startswith("fwd:") else f"Fwd: {original.subject}"
+    body = f"{note}\n\n" if note else ""
+    body += f"---------- Forwarded message ----------\nTo: {original.recipient_email}\nSubject: {original.subject}\n\n{original.body_text}"
+    forwarded = Outbound(
+        recipient_email=address, recipient_name=address, subject=subject, body_text=body,
+        forwarded_from_id=original.id, idempotency_key=f"forward:{uuid4()}",
+    )
+    db.add(forwarded)
+    audit(db, user, "message.forwarded", forwarded, "Queued a sandbox forward", after={"forwarded_from_id": str(id), "recipient_email": address})
+    db.commit()
+    return {**serialize(forwarded), "attachments": attachments_for(db, source_campaign_id(db, original))}
 
 
 @router.post("/outbox/{id}/failure", response_model=ObjectView)

@@ -3,13 +3,15 @@ import os
 from pathlib import Path
 from sqlalchemy import select
 from .db import SessionLocal
-from .models import User, Committee, Category, Qualification
+from .models import User, Committee, Category, Qualification, PilotCompetition
+from .competition_catalog import CATEGORIES
 from .auth import hasher
 from .services import normalize_row, write_judge
 
 
 def seed(db):
     if db.scalar(select(User).limit(1)):
+        seed_competitions(db)
         return
     password = os.environ["SEED_PASSWORD"]
     for short, role, name in [
@@ -45,6 +47,35 @@ def seed(db):
             data, errors = normalize_row(raw, {k: k for k in raw})
             if not errors:
                 write_judge(db, data, director, source="fabricated development seed")
+    db.commit()
+    seed_competitions(db)
+
+
+def seed_competitions(db):
+    director = db.scalar(select(User).where(User.role == "director"))
+    if not director:
+        return
+    for slug, (_, names) in CATEGORIES.items():
+        for name in names:
+            if not db.scalar(select(PilotCompetition.id).where(
+                PilotCompetition.category_slug == slug,
+                PilotCompetition.name == name,
+                PilotCompetition.event_year == 2027,
+                PilotCompetition.is_pilot.is_(False),
+            )):
+                db.add(PilotCompetition(
+                    name=name, event_year=2027, category_slug=slug,
+                    is_pilot=False, created_by=director.id,
+                ))
+    if not db.scalar(select(PilotCompetition.id).where(
+        PilotCompetition.category_slug == "arts",
+        PilotCompetition.name == "Culinary Arts",
+        PilotCompetition.event_year == 2027,
+    )):
+        db.add(PilotCompetition(
+            name="Culinary Arts", event_year=2027, category_slug="arts",
+            is_pilot=True, created_by=director.id,
+        ))
     db.commit()
 
 

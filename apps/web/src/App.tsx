@@ -17,7 +17,6 @@ import {
   Inbox,
   LifeBuoy,
   History,
-  Settings,
   Search,
   LogOut,
   ShieldCheck,
@@ -26,17 +25,20 @@ import {
   PanelLeftOpen,
   Moon,
   Sun,
+  FolderKanban,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useData, useAction, User, Page, can, label } from "./api";
 import { Field, ErrorBox, Loading } from "./ui";
-import { Dashboard, AuditPage, SettingsPage } from "./Overview";
+import { Dashboard, AuditPage } from "./Overview";
 import { Judges, JudgeDetail, SavedLists } from "./Judges";
+import { JudgeDirectory } from "./JudgeDirectory";
 import { Imports, ImportWizard, Duplicates, DuplicateDetail } from "./Imports";
 import { Campaigns, CampaignNew, CampaignDetail, Outbox } from "./Campaigns";
 import { Tickets, TicketNew, TicketDetail } from "./Tickets";
+import { Competitions, CompetitionCategory, PilotDetail, DeletedCompetitions } from "./Pilots";
 const Auth = createContext<User | undefined>(undefined);
 export const useUser = () => useContext(Auth);
 const loginSchema = z.object({
@@ -120,6 +122,7 @@ const navGroups = [
       ["/imports", "Imports", Upload, "imports"],
       ["/duplicates", "Duplicate review", Copy, "imports"],
       ["/saved-lists", "Saved lists", Bookmark, "judges"],
+      ["/competitions", "Competitions", FolderKanban, "judges"],
       ["/campaigns", "Campaigns", Send, "campaigns"],
       ["/outbox", "Sandbox outbox", Inbox, "outbox"],
     ],
@@ -129,7 +132,6 @@ const navGroups = [
     label: "Administration",
     items: [
       ["/audit", "Audit trail", History, "audit"],
-      ["/settings/categories", "Settings", Settings, "catalogs"],
     ],
   },
 ] as const;
@@ -333,7 +335,8 @@ export default function App() {
                 element={<Navigate to="/dashboard" replace />}
               />
               <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/judges" element={<Judges />} />
+              <Route path="/judges" element={<JudgeDirectory />} />
+              <Route path="/contacts" element={<Judges />} />
               <Route path="/judges/:id" element={<JudgeDetail />} />
               <Route
                 path="/imports"
@@ -383,6 +386,20 @@ export default function App() {
                   </Guard>
                 }
               />
+              <Route
+                path="/competitions"
+                element={<Guard permission="judges"><Competitions /></Guard>}
+              />
+              <Route
+                path="/competitions/:category"
+                element={<Guard permission="judges"><CompetitionCategory /></Guard>}
+              />
+              <Route
+                path="/competitions/:category/:id"
+                element={<Guard permission="judges"><PilotDetail /></Guard>}
+              />
+              <Route path="/pilots" element={<Navigate to="/competitions" replace />} />
+              <Route path="/pilots/:id" element={<Guard permission="judges"><PilotDetail /></Guard>} />
               <Route
                 path="/campaigns"
                 element={
@@ -448,13 +465,10 @@ export default function App() {
                 }
               />
               <Route
-                path="/settings/:kind"
-                element={
-                  <Guard permission="catalogs">
-                    <SettingsPage />
-                  </Guard>
-                }
+                path="/competitions/deletions"
+                element={<Guard permission="judges"><DeletedCompetitions /></Guard>}
               />
+              <Route path="/settings/:kind" element={<Navigate to="/dashboard" replace />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route
                 path="*"
@@ -468,7 +482,7 @@ export default function App() {
             </Routes>
           </main>
           <footer className="footer">
-            MIST Deck <span>Fabricated data only · Local workspace</span>
+            MIST Deck <span>Local prototype · Sandbox email</span>
           </footer>
         </div>
       </div>

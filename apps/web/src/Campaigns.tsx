@@ -7,7 +7,7 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { Plus, Send, Mail, ShieldCheck } from "lucide-react";
-import { useData, useAction, Page, Row, can, label, date } from "./api";
+import { useData, useAction, api, Page, Row, can, label, date } from "./api";
 import { useUser } from "./App";
 import {
   Heading,
@@ -112,6 +112,8 @@ export function Campaigns() {
 }
 export function CampaignNew() {
   const [params] = useSearchParams();
+  const pilotId = params.get("competition_id") || params.get("pilot_id");
+  const pilot = useData<Row>(`/competitions/${pilotId}`, !!pilotId);
   const location = useLocation();
   const ids: string[] = location.state?.judge_ids || [];
   const [list, setList] = useState(params.get("list") || "");
@@ -120,11 +122,12 @@ export function CampaignNew() {
   const navigate = useNavigate();
   const [excluded, setExcluded] = useState<any[]>([]);
   const [created, setCreated] = useState<Row | null>(null);
+  const [fileError, setFileError] = useState<unknown>();
   return (
     <>
-      <Back to="/campaigns">Campaigns</Back>
+      <Back to={pilotId && pilot.data ? `/competitions/${pilot.data.category_slug}/${pilotId}` : "/campaigns"}>{pilotId ? "Competition" : "Campaigns"}</Back>
       <Heading
-        title="Compose an invitation"
+        title={pilotId ? `Compose for ${pilot.data?.name || "competition"}` : "Compose an invitation"}
         description="Each judge receives a separate, personalized sandbox message."
       />
       <form
@@ -140,6 +143,7 @@ export function CampaignNew() {
                 body_template: fd.get("body"),
                 judge_ids: ids,
                 saved_list_id: list || null,
+                pilot_competition_id: pilotId,
                 variables: {
                   event_name: fd.get("event_name"),
                   event_date: fd.get("event_date"),
@@ -147,6 +151,18 @@ export function CampaignNew() {
                 },
               },
             });
+            try {
+              for (const file of fd.getAll("attachments")) {
+                if (!(file instanceof File) || !file.name) continue;
+                const upload = new FormData();
+                upload.set("file", file);
+                await api(`/campaigns/${result.id}/attachments`, "POST", upload);
+              }
+            } catch (cause) {
+              setFileError(cause);
+              setCreated(result);
+              return;
+            }
             if (result.excluded.length) {
               setExcluded(result.excluded);
               setCreated(result);
@@ -192,7 +208,7 @@ export function CampaignNew() {
               <Field label="Event name">
                 <input
                   name="event_name"
-                  defaultValue="MIST NJ · Sandbox Event"
+                  defaultValue={pilot.data?.name || "MIST NJ · Sandbox Event"}
                 />
               </Field>
               <Field label="Event date">
@@ -221,6 +237,9 @@ export function CampaignNew() {
                 }
               />
             </Field>
+            <Field label="Attachments (optional; up to five files, 5 MB each)">
+              <input name="attachments" type="file" multiple accept=".pdf,.docx,.png,.jpg,.jpeg,.txt,.csv" />
+            </Field>
             <div className="template-help">
               <strong>Personalization variables</strong>
               <div className="tags">
@@ -243,10 +262,10 @@ export function CampaignNew() {
           <ShieldCheck size={22} />
           <p>
             Do-not-contact records and invalid emails are excluded. Recipients
-            are deduplicated before you preview and request approval.
+            are deduplicated before you preview and request approval. Delivery stays in the sandbox outbox.
           </p>
         </div>
-        <ErrorBox error={action.error} />
+        <ErrorBox error={action.error || fileError} />
         <div className="form-footer">
           <Link to="/campaigns">Cancel</Link>
           <button className="primary" disabled={action.isPending || !!created}>
@@ -260,6 +279,7 @@ export function CampaignNew() {
           onClose={() => navigate("/campaigns/" + created.id)}
         >
           <p>{created.recipient_count} eligible recipients remain.</p>
+          {!!fileError && <p>The draft was created, but an attachment failed. Open the draft to retry the upload.</p>}
           {excluded.map((r, i) => (
             <p key={i}>
               {r.judge_name}: {r.reason}
@@ -313,6 +333,7 @@ export function CampaignDetail() {
   const [page, setPage] = useState(1);
   const previews = useData<Page>(`/campaigns/${id}/preview?page=${page}`);
   const action = useAction();
+  const [fileError, setFileError] = useState<unknown>();
   const user = useUser();
   if (query.isPending) return <Loading />;
   if (!query.data) return <ErrorBox error={query.error} />;
@@ -343,6 +364,11 @@ export function CampaignDetail() {
         </div>
       </div>
       <ErrorBox error={action.error} />
+      <Panel title="Attachments">
+        {c.attachments?.length ? <ul className="attachment-list">{c.attachments.map((file: Row) => <li key={file.id}><a href={`/api/campaigns/${id}/attachments/${file.id}`}>{file.filename}</a> <small>({Math.ceil(file.size / 1024)} KB)</small>{c.status === "draft" && <button onClick={() => action.mutate({ path: `/campaigns/${id}/attachments/${file.id}`, method: "DELETE" })}>Remove</button>}</li>)}</ul> : <p className="caption">No files attached.</p>}
+        {c.status === "draft" && <Field label="Add file (PDF, DOCX, PNG, JPG, TXT, or CSV; 5 MB max)"><input type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.txt,.csv" onChange={async e => { const file = e.target.files?.[0]; if (!file) return; const body = new FormData(); body.set("file", file); try { await api(`/campaigns/${id}/attachments`, "POST", body); setFileError(undefined); query.refetch(); e.target.value = ""; } catch (cause) { setFileError(cause); } }} /></Field>}
+        <ErrorBox error={fileError} />
+      </Panel>
       <div className="toolbar">
         <div className="actions">
           {c.status === "draft" && (
@@ -409,6 +435,8 @@ export function Outbox() {
   const action = useAction();
   const user = useUser();
   const [selected, setSelected] = useState<Row | null>(null);
+  const [forwarding, setForwarding] = useState(false);
+  const [forwardNotice, setForwardNotice] = useState("");
   const current =
     query.data?.items.find((r) => r.id === selected?.id) || selected;
   return (
@@ -451,6 +479,7 @@ export function Outbox() {
         </select>
       </div>
       <ErrorBox error={query.error || action.error} />
+      {forwardNotice && <div role="status" className="notice">{forwardNotice}</div>}
       {query.isPending ? (
         <Loading />
       ) : (
@@ -488,7 +517,7 @@ export function Outbox() {
                   <td>{r.attempt_count} / 3</td>
                   <td>{date(r.completed_at)}</td>
                   <td>
-                    <button onClick={() => setSelected(r)}>Read message</button>
+                    <button onClick={() => { setSelected(r); setForwarding(false); }}>Read message</button>
                   </td>
                 </tr>
               ))}
@@ -515,6 +544,7 @@ export function Outbox() {
           </div>
           <h3>{current.subject}</h3>
           <p className="message-body">{current.body_text}</p>
+          {!!current.attachments?.length && <div className="attachment-list"><strong>Attachments</strong>{current.attachments.map((file: Row) => <a key={file.id} href={`/api/outbox/${current.id}/attachments/${file.id}`}>{file.filename}</a>)}</div>}
           <dl>
             <div>
               <dt>Created</dt>
@@ -535,6 +565,13 @@ export function Outbox() {
           </dl>
           {current.last_error && <ErrorBox error={current.last_error} />}
           <ErrorBox error={action.error} />
+          {current.status === "sent" && can(user, "outbox") && <button onClick={() => setForwarding(!forwarding)}>{forwarding ? "Cancel forward" : "Forward message"}</button>}
+          {forwarding && <form onSubmit={async e => { e.preventDefault(); const values = new FormData(e.currentTarget); try { await action.mutateAsync({ path: `/outbox/${current.id}/forward`, body: { recipient_email: values.get("recipient_email"), note: values.get("note") } }); setForwardNotice("Forward queued in the sandbox outbox."); setForwarding(false); setSelected(null); } catch {} }}>
+            <Field label="Forward to"><input name="recipient_email" type="email" required placeholder="registration@example.com" /></Field>
+            <Field label="Note (optional)"><textarea name="note" rows={3} /></Field>
+            <p className="caption">The original message and its attachments will be included. Delivery stays in the sandbox.</p>
+            <button className="primary" disabled={action.isPending}>Queue sandbox forward</button>
+          </form>}
           {can(user, "jobs") &&
             ["queued", "failed"].includes(current.status) && (
               <div className="actions">

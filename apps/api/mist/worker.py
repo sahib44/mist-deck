@@ -10,8 +10,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Protocol
 from sqlalchemy import select, or_, and_
 from .db import SessionLocal, now
-from .models import Outbound, Recipient, Campaign, Judge
-from .services import safe_email, audit
+from .models import Outbound, Recipient, Campaign, Judge, PilotNomination
+from .services import contact_email, audit
 
 log = logging.getLogger("mist.worker")
 
@@ -22,7 +22,8 @@ class EmailProvider(Protocol):
 
 class MockEmailProvider:
     def send(self, message):
-        safe_email(message.recipient_email)
+        # A mock receipt only. This provider has no network transport.
+        contact_email(message.recipient_email)
         if message.simulate_failure:
             raise RuntimeError("Simulated sandbox delivery failure")
         # Database identity is the delivery receipt. Transaction retries cannot produce a second message.
@@ -105,7 +106,18 @@ def deliver(db, id, worker_id):
             msg.status, msg.completed_at, msg.last_error = "sent", now(), ""
             if rec:
                 rec.status, rec.sent_at = "sent", now()
-                judge.last_contacted_at = now()
+                if campaign.pilot_competition_id:
+                    nomination = db.scalar(
+                        select(PilotNomination).where(
+                            PilotNomination.pilot_id == campaign.pilot_competition_id,
+                            PilotNomination.judge_id == judge.id,
+                        )
+                    )
+                    if nomination and nomination.status in {"to_contact", "awaiting_response"}:
+                        nomination.status = "awaiting_response"
+                        nomination.last_contacted_at = now()
+                else:
+                    judge.last_contacted_at = now()
         except Exception as exc:
             msg.last_error = (
                 "Simulated sandbox delivery failure"

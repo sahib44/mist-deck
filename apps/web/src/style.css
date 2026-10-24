@@ -1691,3 +1691,48 @@ dialog::backdrop { background: #120a20a8; }
   .login-page { padding: 75px 16px; }
   .login-card { padding: 34px 26px 30px; }
 }
+
+/* Pilot competition workspaces */
+.pilot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(235px, 1fr)); gap: 16px; }
+.pilot-card { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-height: 180px; padding: 22px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); }
+.pilot-card:hover { border-color: var(--focus); background: var(--surface-soft); }
+.pilot-card-icon { display: inline-flex; color: var(--accent); background: var(--pale); border-radius: 9px; padding: 9px; }
+.pilot-card-year { color: var(--accent); font-size: .68rem; font-weight: 700; letter-spacing: .08em; }
+.pilot-card strong { color: var(--heading); font-size: 1.2rem; }
+.pilot-card small { margin-top: auto; }
+.pilot-delete { color: #bd4658; border-color: #bd4658; }
+.pilot-delete:hover { background: rgba(189, 70, 88, .1); }
+.pilot-existing { margin: 16px 0 22px; color: var(--text); }
+.pilot-existing summary { font-size: .85rem; font-weight: 600; }
+.pilot-existing-list { max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 5px 12px; margin-top: 10px; }
+.pilot-existing-list label { display: flex; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: .82rem; }
+.pilot-existing-list label:last-child { border: 0; }
+.pilot-existing-list small { margin-top: 2px; }
+.pilot-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 22px; }
+.pilot-summary button { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 16px; border-radius: 10px; }
+.pilot-summary button.active { background: var(--pale); border-color: var(--focus); }
+.pilot-summary strong { color: var(--heading); font-size: 1.55rem; }
+.pilot-summary span { color: var(--muted); font-size: .78rem; }
+.pilot-document { display: flex; align-items: center; gap: 9px; margin-bottom: 18px; color: var(--accent); overflow-wrap: anywhere; }
+.pilot-filters { display: flex; align-items: flex-end; gap: 15px; flex-wrap: wrap; margin: 15px 0 20px; }
+.pilot-filters .field { flex: 1; min-width: 180px; margin-bottom: 0; }
+.pilot-overdue { display: flex; align-items: center; gap: 8px; min-height: 40px; color: var(--text); font-size: .8rem; }
+.pilot-select-all { display: flex; align-items: center; gap: 8px; padding: 12px 14px; color: var(--muted); font-size: .78rem; border-bottom: 1px solid var(--border); }
+.pilot-judge-list { border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+.pilot-judge { display: flex; align-items: flex-start; gap: 13px; padding: 16px 14px; border-bottom: 1px solid var(--border); }
+.pilot-judge:last-child { border: 0; }
+.pilot-judge > input[type="checkbox"] { margin-top: 5px; }
+.pilot-judge-main { flex: 1; min-width: 0; }
+.pilot-judge-main strong { color: var(--heading); }
+.pilot-judge-main small { display: block; overflow-wrap: anywhere; }
+.pilot-judge-main .tags { margin: 8px 0; }
+.pilot-judge .field { min-width: 180px; margin: 0; }
+.pilot-judge .field select { min-width: 180px; }
+.attachment-list { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem 1rem; margin: .75rem 0; padding: 0; list-style: none; }
+.attachment-list li { display: flex; align-items: center; gap: .5rem; }
+.directory-qualification { min-width: 16rem; max-width: 32rem; white-space: pre-wrap; }
+@media (max-width: 800px) {
+  .pilot-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pilot-judge { flex-wrap: wrap; }
+  .pilot-judge .field { flex-basis: 100%; padding-left: 30px; }
+}

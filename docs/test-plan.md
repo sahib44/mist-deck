@@ -11,7 +11,11 @@
   separate Compose project. The browser maps and commits the duplicate CSV, saves
   an Arts list, previews/approves a campaign, observes one delivery per recipient,
   creates/assigns a ticket, adds a private note and public reply, resolves it, and
-  verifies audit events. Database assertions supplement visible UI assertions.
+  verifies audit events. A second scenario creates a pilot, adds judges, updates
+  responses, filters them, attaches a file, forwards a sandbox message, checks
+  the directory and separate mock receipts. A third checks permanent competition
+  protection, the three-step pilot delete flow, and the deletion log. Database assertions
+  supplement visible UI assertions.
 - **Build:** strict TypeScript compilation, Vite production bundle, fresh Docker
   startup, Alembic migration check, service health checks, desktop/tablet screenshots.
 
@@ -34,6 +38,15 @@ Exact commands live in the repository README and `scripts/test.sh`.
   recovery, cancellation and late suppression are tested.
 - Ticket internal notes create zero messages; public replies create one and are
   idempotent on request UUID; assignment and lifecycle updates are audited.
+- Pilot nominations track response and contact timing independently per
+  competition; seven-day follow-ups, phone-only contacts, document access and
+  pilot recipient scoping are covered.
+- Seeded competition folders and fixed competition entries are present; deletion
+  is forbidden for fixed entries and audited for pilots.
+- Directory rows expose per-competition response and written qualification;
+  sheet export preserves added order and the category/competition hierarchy.
+- Draft attachments validate type and size, remain available through the mock
+  outbox, and follow sandbox-only forwards without external delivery.
 - Support staff cannot read judges/imports/other tickets or reassign; competition
   access is scoped; technology cannot obtain private content via tickets/outbox/audit.
 - Passwords are Argon2id hashes; unauthorized requests fail; mutation CSRF header
@@ -41,8 +54,9 @@ Exact commands live in the repository README and `scripts/test.sh`.
 
 ## Sample cases
 
-See README's per-line duplicate outcome table. Use only the two supplied CSVs and
-reserved test email addresses. Import counts assume the development seed is intact.
+See README's per-line duplicate outcome table. Tests use only the two supplied
+fabricated CSVs and reserved test email addresses. Import counts assume the
+development seed is intact.
 The end-to-end runner resets only the dedicated `mist_e2e` database before each
 run, without resetting the user's main database. This preserves the original
 exact/possible duplicate scenarios on repeat runs.

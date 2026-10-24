@@ -200,7 +200,7 @@ export function ImportWizard() {
             </div>
             <div className="form-footer">
               <span>
-                Only fabricated names and reserved test email domains.
+                Contact records stay in the local database. Email delivery stays in the sandbox.
               </span>
               <button className="primary" disabled={!file || action.isPending}>
                 Upload and continue <ArrowRight size={16} />

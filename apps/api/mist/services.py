@@ -67,6 +67,29 @@ def safe_email(value, optional=False):
     return value
 
 
+def contact_email(value, optional=False):
+    """Validate a contact address without granting permission for network delivery."""
+    value = email(value)
+    if not value and optional:
+        return ""
+    local, separator, domain = value.partition("@")
+    if (
+        not separator
+        or len(value) > 254
+        or not 1 <= len(local) <= 64
+        or not re.fullmatch(r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+", local)
+        or local.startswith(".")
+        or local.endswith(".")
+        or ".." in local
+        or not 1 <= len(domain) <= 253
+        or "." not in domain
+        or any(not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", part) for part in domain.split("."))
+        or len(domain.rsplit(".", 1)[-1]) < 2
+    ):
+        fail("invalid_contact_email", "Enter a valid email address.")
+    return value
+
+
 def normalized(value):
     value = unicodedata.normalize("NFKC", str(value or "")).casefold()
     return " ".join(
@@ -202,7 +225,7 @@ def write_judge(db, data, actor, existing=None, source="manual"):
             continue
         value = data[key]
         if key.endswith("email"):
-            value = safe_email(value, optional=True)
+            value = contact_email(value, optional=True)
         elif isinstance(value, str):
             value = clean(value)
         setattr(judge, key, value)
@@ -382,11 +405,9 @@ def normalize_row(raw, mapping):
         errors.append("Years judged must be semicolon-separated numbers")
     for field in ["primary_email", "alternate_email"]:
         try:
-            safe_email(data[field], optional=True)
+            contact_email(data[field], optional=True)
         except Exception:
-            errors.append(
-                f"{field}: only valid example.com, example.org, example.net addresses are allowed"
-            )
+            errors.append(f"{field}: enter a valid email address")
     if not data["display_name"] and not data["primary_email"]:
         errors.append("Missing all usable identity fields")
     if not data["display_name"]:
