@@ -4,6 +4,7 @@ import { ImportSteps, validateMapping, MergeFields } from "./Imports";
 import { RecipientPreview } from "./Campaigns";
 import { ReplyComposer } from "./Tickets";
 import { can, User } from "./api";
+import { RecipientChips } from "./Recipients";
 import { Loading, ErrorBox } from "./ui";
 
 describe("import wizard", () => {
@@ -126,5 +127,27 @@ describe("permissions and request feedback", () => {
     );
     expect(screen.getByRole("status")).toHaveTextContent("Loading records");
     expect(screen.getByRole("alert")).toHaveTextContent("Mapping failed");
+  });
+});
+
+
+describe("team permissions and recipients", () => {
+  it("grants everyday tools to heads and deletion only to the chair or director", () => {
+    const member = { role: "competitions_member", permissions: [] } as unknown as User;
+    expect(can(member, "campaigns")).toBe(true);
+    expect(can(member, "approve")).toBe(true);
+    expect(can(member, "delete")).toBe(false);
+    expect(can({ ...member, role: "competitions_chair" }, "delete")).toBe(true);
+    expect(can({ ...member, role: "director" }, "delete")).toBe(true);
+    expect(can({ ...member, role: "technology_administrator" }, "delete")).toBe(false);
+  });
+  it("shows each recipient name and removes only the selected person", () => {
+    const change = vi.fn();
+    const recipients = [{ key: "one", name: "First Judge", email: "first@example.org" }, { key: "two", name: "Second Judge", email: "second@example.org" }];
+    render(<RecipientChips recipients={recipients} onChange={change} />);
+    expect(screen.getByText("First Judge")).toBeVisible();
+    expect(screen.getByText("Second Judge")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Remove First Judge" }));
+    expect(change).toHaveBeenCalledWith([recipients[1]]);
   });
 });

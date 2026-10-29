@@ -50,7 +50,7 @@ export function useData<T = any>(path: string, enabled = true) {
     enabled,
     retry: false,
     refetchInterval:
-      path.startsWith("/outbox") || path.startsWith("/campaigns/")
+      ["/outbox", "/campaigns", "/notifications", "/conversations", "/competitions", "/judge-directory", "/dashboard"].some(prefix => path.startsWith(prefix))
         ? 3000
         : false,
   });
@@ -79,6 +79,7 @@ export function useAction() {
 }
 const grants: Record<string, string[]> = {
   director: [
+    "delete",
     "judges",
     "imports",
     "campaigns",
@@ -101,6 +102,10 @@ const grants: Record<string, string[]> = {
   ],
   support_staff: ["tickets"],
 };
+for (const role of ["competitions_administrator", "competitions_member", "competitions_chair"]) {
+  grants[role] = ["judges", "imports", "campaigns", "approve", "tickets", "catalogs", "outbox"];
+}
+grants.competitions_chair.push("delete");
 export function can(user: User | undefined, permission: string) {
   return (
     !!user &&

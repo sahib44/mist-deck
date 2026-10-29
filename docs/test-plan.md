@@ -30,7 +30,7 @@ Exact commands live in the repository README and `scripts/test.sh`.
 - Full import counts and error export, replay-safe commit, within-batch duplicates.
 - Merge snapshots preserve alternate values; qualifications, categories, notes and
   history remain linked; campaign history is not orphaned.
-- Dynamic saved lists change when matching contacts change.
+- Recipient search supports names/emails, removable chips, one-off addresses and optional directory inclusion.
 - DNC exclusion, different-ID email deduplication, unknown template rejection.
 - Approval permission enforced; one outbound row per recipient; repeated queue
   and delivery cannot duplicate receipts.
@@ -88,3 +88,10 @@ exact/possible duplicate scenarios on repeat runs.
 The current verification results are recorded in `docs/validation.md` after the
 final run. A passing test suite confirms the exercised local workflows; it does
 not certify production readiness or a future external email provider.
+
+
+Team inbox checks: chair/member deletion authorization at the API, protected
+permanent competitions, two warning flags plus password and fresh CSV backup,
+retained message snapshots after clearing, direct recipient deduplication, exact
+failed-recipient alerts, incoming email idempotency, nonjudge ticket routing,
+competition-specific unread markers, and read-cursor protection for later replies.

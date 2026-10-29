@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, Plus, ShieldCheck } from "lucide-react";
 import { useData, Page, Row, can, label, date } from "./api";
 import { useUser } from "./App";
+import { Notifications } from "./Inbox";
 import {
   Heading,
   Panel,
@@ -59,7 +60,7 @@ export function Dashboard() {
   );
   return (
     <>
-      <Heading title="Operations overview" eyebrow="WORKSPACE" />
+      <Heading title="Operations overview" eyebrow="WORKSPACE"><Notifications /></Heading>
       {(judgeMetrics.length > 0 || judgeGroups.length > 0) && (
         <section className="overview-section" aria-labelledby="judge-overview-heading">
           <div className="section-heading">
@@ -91,7 +92,7 @@ export function Dashboard() {
       {(ticketMetrics.length > 0 || ticketGroups.length > 0) && (
         <section className="overview-section" aria-labelledby="ticket-overview-heading">
           <div className="section-heading">
-            <h2 id="ticket-overview-heading">Competitor tickets</h2>
+            <h2 id="ticket-overview-heading">Competitions tickets</h2>
             {can(user, "tickets") && user?.role !== "support_staff" && (
               <Link className="button" to="/tickets/new">
                 <Plus size={16} /> New ticket

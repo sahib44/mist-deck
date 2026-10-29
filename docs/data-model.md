@@ -113,3 +113,12 @@ supports reproducible testing; it is not a production retention policy. Real-dat
 use would need separate deletion/anonymization, export, retention, backup and
 access-review rules. Keep real personal data and private documents out of the
 public repository; assess local data handling before use with real records.
+
+
+Shared inbox additions: `campaign_recipients.judge_id` is optional, with a stable
+recipient name/email snapshot for one-off recipients and retained history after
+directory clearing. `inbound_messages` links known senders to judge conversations
+and optionally to a competition/campaign; unknown senders link to tickets.
+`notifications` stores shared read state and one failure alert per outbound message.
+`directory_backups` retains the CSV and directory fingerprint used for a chair's
+password-confirmed clear. Saved-list storage was removed.

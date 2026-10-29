@@ -1,12 +1,12 @@
 # Validation record
 
-Revalidated locally on 2026-10-24 with Docker Desktop (Linux ARM64 containers).
+Revalidated locally on 2026-10-27 with Docker Desktop (Linux ARM64 containers).
 
 | Check | Result |
 | --- | --- |
-| PostgreSQL backend unit/integration tests | **31 passed** |
-| Frontend Vitest / React Testing Library | **7 passed** |
-| Playwright organizer journeys | **3 passed**, including competition navigation, pilot deletion, attachments, forwarding, and the new directory |
+| PostgreSQL backend unit/integration tests | **41 passed** |
+| Frontend Vitest / React Testing Library | **9 passed** |
+| Playwright organizer journeys | **4 passed**, including recipient chips, judge reply alerts, notification navigation, member/chair permissions, and password-confirmed directory clearing |
 | TypeScript strict compilation | Passed |
 | Vite production build | Passed |
 | Docker Compose build and startup | Passed |
@@ -16,8 +16,8 @@ Revalidated locally on 2026-10-24 with Docker Desktop (Linux ARM64 containers).
 | Desktop / tablet visual review | Passed after correcting collapsed-navigation visibility |
 
 The full browser run imported the fabricated duplicate CSV, resolved exact and
-possible matches, committed 2 new / 6 updated / 2 skipped rows, filtered Arts
-judges, saved a dynamic list, previewed and approved individual messages, and
+possible matches, committed 2 new / 6 updated / 2 skipped rows, selected directory
+judges, reviewed recipient exclusions, previewed and approved individual messages, and
 observed sandbox delivery. It then created and assigned a ticket, verified that a
 private note produced no outbound message, sent a public sandbox reply, resolved
 the ticket, signed out, signed in as director, and inspected the audit trail.
@@ -48,3 +48,17 @@ lockfile; no claim of a full production/container security certification is made
 
 Known MVP boundaries and implementation choices are documented in README and
 architecture.md. Production deployment and real email remain out of scope.
+
+
+The shared-team browser journey used the member account to add competition judges,
+remove/re-add recipient chips, add a one-off recipient without creating a judge,
+search campaigns by recipient email, receive a simulated judge reply, follow unread
+markers from category to competition to judge, and clear those markers by opening
+the conversation. A nonjudge sender became a ticket. The chair then downloaded a
+sheet backup, failed an incorrect password check, and successfully cleared all
+judges with the correct password while retaining mail history.
+
+The main local workspace was separately backed up and reset at the user's explicit
+request after these tests. Accounts and competition definitions were retained;
+judges, imports, campaigns, outbound/inbound messages, tickets and notifications
+were cleared. Private snapshots and test credentials are Git-ignored.

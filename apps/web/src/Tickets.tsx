@@ -60,6 +60,8 @@ export function IdSelect({
                   "director",
                   "support_staff",
                   "competitions_administrator",
+                  "competitions_chair",
+                  "competitions_member",
                 ].includes(r.role) ||
                 r.permissions.includes("private_tickets")),
           )
@@ -361,7 +363,7 @@ export function TicketNew() {
     <>
       <Back to="/tickets">Support desk</Back>
       <Heading
-        title="Simulate a competitor email"
+        title="Simulate a ticket email"
         description="Create a support ticket using a fabricated requester and reserved test address."
       />
       <Panel title="Incoming message">
@@ -388,14 +390,14 @@ export function TicketNew() {
         >
           <div className="form-grid">
             <Field label="Requester name">
-              <input name="name" required placeholder="Fictional Competitor" />
+              <input name="name" required placeholder="Sender name" />
             </Field>
             <Field label="Requester email">
               <input
                 type="email"
                 name="email"
                 required
-                placeholder="competitor@example.com"
+                placeholder="sender@example.com"
               />
             </Field>
           </div>

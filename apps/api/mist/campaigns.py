@@ -7,7 +7,7 @@ from sqlalchemy import select, func
 from .db import get_db, now
 from .models import *
 from .schemas import CampaignIn, ForwardIn, ObjectView, Page, Failure
-from .auth import require, current_user, allowed, fail
+from .auth import require, current_user, allowed, fail, COMPETITIONS_ROLES
 from .services import *
 
 router = APIRouter(prefix="/api")
@@ -63,6 +63,7 @@ def source_campaign_id(db, message):
 @router.get("/campaigns", response_model=Page)
 def campaigns(
     status: str = "",
+    q: str = "",
     page_no: int = Query(1, alias="page", ge=1),
     page_size: int = Query(25, ge=1, le=100),
     user=Depends(require("campaigns")),
@@ -71,6 +72,9 @@ def campaigns(
     stmt = select(Campaign).order_by(Campaign.created_at.desc())
     if status:
         stmt = stmt.where(Campaign.status == status)
+    if q.strip():
+        term = f"%{q.strip()}%"
+        stmt = stmt.where(or_(Campaign.name.ilike(term), Campaign.subject_template.ilike(term), Campaign.id.in_(select(Recipient.campaign_id).where(or_(Recipient.recipient_email.ilike(term), Recipient.recipient_name.ilike(term))))))
     return page(db, stmt, page_no, page_size)
 
 
@@ -80,92 +84,48 @@ def create(data: CampaignIn, user=Depends(require("campaigns")), db=Depends(get_
     render_template(data.body_template, {})
     if set(data.variables) - TEMPLATE_VARS:
         fail("unknown_template_variable", "Unsupported event variable.")
+    if len(data.judge_ids) + len(data.recipients) > 5000:
+        fail("recipient_limit", "Limit each campaign to 5000 contacts.")
     pilot = get(db, PilotCompetition, data.pilot_competition_id) if data.pilot_competition_id else None
     if pilot and pilot.deleted_at:
         fail("not_found", "Competition not found.", 404)
-    if pilot and data.saved_list_id:
-        fail("invalid_recipients", "Choose judges from the pilot, not a saved list.")
-    pilot_nominations = {}
-    if pilot:
-        pilot_nominations = {
-            n.judge_id: n for n in db.scalars(
-                select(PilotNomination).where(
-                    PilotNomination.pilot_id == pilot.id,
-                    PilotNomination.judge_id.in_(data.judge_ids),
-                )
-            )
-        }
-        if not data.judge_ids or len(pilot_nominations) != len(set(data.judge_ids)):
-            fail("invalid_recipients", "Select judges who belong to this pilot.")
-    stmt = (
-        judge_query(get(db, SavedList, data.saved_list_id).filter_definition)
-        if data.saved_list_id
-        else select(Judge).where(
-            Judge.id.in_(data.judge_ids), Judge.merged_into_id.is_(None)
-        )
-    )
-    judges = db.scalars(stmt).all()
-    if len(judges) > 5000:
-        fail("recipient_limit", "Limit each campaign to 5000 contacts.")
-    campaign = Campaign(
-        name=clean(data.name),
-        subject_template=clean(data.subject_template),
-        body_template=clean(data.body_template),
-        variables=data.variables,
-        created_by=user.id,
-        pilot_competition_id=pilot.id if pilot else None,
-    )
+    judges = db.scalars(select(Judge).where(Judge.id.in_(data.judge_ids), Judge.merged_into_id.is_(None))).all()
+    if len(judges) != len(set(data.judge_ids)):
+        fail("invalid_recipients", "A selected judge no longer exists. Refresh the recipients.")
+    nominations = {n.judge_id: n for n in db.scalars(select(PilotNomination).where(PilotNomination.pilot_id == pilot.id))} if pilot else {}
+    contacts = [(judge, judge.primary_email or judge.alternate_email, judge.display_name) for judge in judges]
+    for incoming in data.recipients:
+        address = contact_email(incoming.email)
+        # An address already in the directory keeps its suppression and conversation history.
+        judge = db.scalar(select(Judge).where(or_(Judge.primary_email == address, Judge.alternate_email == address, Judge.preserved_emails.contains([address])), Judge.merged_into_id.is_(None)))
+        name = clean(incoming.name).strip() or (judge.display_name if judge else address)
+        if not judge and incoming.add_to_directory:
+            first, _, last = name.partition(" ")
+            judge = write_judge(db, {"display_name": name, "first_name": first, "last_name": last, "primary_email": address}, user, source="campaign recipient")
+        contacts.append((judge, address, name))
+    campaign = Campaign(name=clean(data.name), subject_template=clean(data.subject_template), body_template=clean(data.body_template), variables=data.variables, created_by=user.id, pilot_competition_id=pilot.id if pilot else None)
     db.add(campaign)
     db.flush()
     excluded, seen = [], set()
-    for judge in judge_views(db, judges):
-        reason = ""
-        if judge["do_not_contact"]:
-            reason = "Do not contact"
-        if pilot and pilot_nominations[UUID(judge["id"])].status == "declined":
-            reason = "Declined this pilot"
+    for judge, raw_address, name in contacts:
+        reason = "Do not contact" if judge and judge.do_not_contact else ""
+        if judge and judge.id in nominations and nominations[judge.id].status == "declined":
+            reason = "Declined this competition"
         try:
-            address = (
-                contact_email(judge["primary_email"])
-                if pilot else safe_email(judge["primary_email"])
-            )
+            address = contact_email(raw_address)
         except Exception:
-            reason = "Missing or invalid email"
-            address = ""
+            address, reason = "", "Missing or invalid email"
         if address in seen:
             reason = "Duplicate normalized email"
         if reason:
-            excluded.append({"judge_name": judge["display_name"], "reason": reason})
+            excluded.append({"judge_name": name, "reason": reason})
             continue
         seen.add(address)
-        values = {
-            **data.variables,
-            "judge_name": judge["display_name"],
-            "first_name": judge["first_name"],
-            "organization": judge["organization"],
-            "category_name": pilot.name if pilot else ", ".join(judge["categories"]),
-        }
-        db.add(
-            Recipient(
-                campaign_id=campaign.id,
-                judge_id=UUID(judge["id"]),
-                recipient_email=address,
-                rendered_subject=render_template(data.subject_template, values),
-                rendered_body=render_template(data.body_template, values),
-            )
-        )
+        values = {**data.variables, "judge_name": name, "first_name": judge.first_name if judge else name.split(" ")[0], "organization": judge.organization if judge else "", "category_name": pilot.name if pilot else ""}
+        db.add(Recipient(campaign_id=campaign.id, judge_id=judge.id if judge else None, recipient_name=name, recipient_email=address, rendered_subject=render_template(data.subject_template, values), rendered_body=render_template(data.body_template, values)))
     if not seen:
-        fail(
-            "no_recipients",
-            "No eligible recipients with email addresses remain.",
-        )
-    audit(
-        db,
-        user,
-        "campaign.created",
-        campaign,
-        f"Created campaign with {len(seen)} recipients",
-    )
+        fail("no_recipients", "Add a recipient from the directory or enter a valid email address.")
+    audit(db, user, "campaign.created", campaign, f"Created campaign with {len(seen)} recipients")
     db.commit()
     return {**serialize(campaign), "recipient_count": len(seen), "excluded": excluded}
 
@@ -184,6 +144,7 @@ def campaign(id: UUID, user=Depends(require("campaigns")), db=Depends(get_db)):
         ).all()
     )
     result["attachments"] = attachments_for(db, id)
+    result["failed_recipients"] = [serialize(rec) for rec in db.scalars(select(Recipient).where(Recipient.campaign_id == id, Recipient.status == "failed"))]
     return result
 
 
@@ -213,7 +174,7 @@ async def upload_campaign_attachment(
 
 
 @router.delete("/campaigns/{id}/attachments/{attachment_id}", response_model=ObjectView)
-def delete_campaign_attachment(id: UUID, attachment_id: UUID, user=Depends(require("campaigns")), db=Depends(get_db)):
+def delete_campaign_attachment(id: UUID, attachment_id: UUID, user=Depends(require("delete")), db=Depends(get_db)):
     campaign = get(db, Campaign, id, True)
     if campaign.status != "draft":
         fail("invalid_state", "Attachments can only be changed while the campaign is a draft.")
@@ -308,21 +269,18 @@ def transition(
             )
         elif action == "queue":
             for rec in db.scalars(select(Recipient).where(Recipient.campaign_id == id)):
-                judge = get(db, Judge, rec.judge_id)
-                if judge.do_not_contact or judge.merged_into_id:
+                judge = db.get(Judge, rec.judge_id) if rec.judge_id else None
+                if judge and (judge.do_not_contact or judge.merged_into_id):
                     rec.status, rec.failure_reason = (
                         "cancelled",
                         "Contact is now suppressed or merged",
                     )
                     continue
-                if campaign.pilot_competition_id:
-                    contact_email(rec.recipient_email)
-                else:
-                    safe_email(rec.recipient_email)
+                contact_email(rec.recipient_email)
                 db.add(
                     Outbound(
                         recipient_email=rec.recipient_email,
-                        recipient_name=judge.display_name,
+                        recipient_name=rec.recipient_name or (judge.display_name if judge else rec.recipient_email),
                         subject=rec.rendered_subject,
                         body_text=rec.rendered_body,
                         related_campaign_recipient_id=rec.id,
@@ -357,7 +315,7 @@ def outbox_scope(user):
         and "private_tickets" not in user.permissions
     ):
         stmt = stmt.where(Outbound.related_ticket_id.is_(None))
-    elif user.role == "competitions_administrator":
+    elif user.role in COMPETITIONS_ROLES:
         from .tickets import ticket_scope
 
         stmt = stmt.where(

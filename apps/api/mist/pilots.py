@@ -11,7 +11,8 @@ from sqlalchemy import func, or_, select
 from .auth import current_user, require, allowed, fail
 from .competition_catalog import CATEGORIES
 from .db import get_db, now
-from .models import Judge, JudgeQualification, Qualification, PilotCompetition, PilotDocument, PilotNomination, User
+from .inbox import competition_unread
+from .models import InboundMessage, Judge, JudgeQualification, Qualification, PilotCompetition, PilotDocument, PilotNomination, User
 from .schemas import ObjectView, Page, PilotJudgeIn, PilotStatusIn, PilotDeleteIn
 from .services import (
     add_relations, audit, clean, contact_email, get, page, serialize, split_values,
@@ -43,7 +44,11 @@ def categories(user=Depends(current_user), db=Depends(get_db)):
         .where(PilotCompetition.deleted_at.is_(None))
         .group_by(PilotCompetition.category_slug)
     ).all())
-    return [{"slug": slug, "name": name, "competition_count": counts.get(slug, 0)}
+    unread = competition_unread(db)
+    unread_by_category = {}
+    for competition in db.scalars(select(PilotCompetition).where(PilotCompetition.id.in_(unread))):
+        unread_by_category[competition.category_slug] = unread_by_category.get(competition.category_slug, 0) + unread[competition.id]
+    return [{"slug": slug, "name": name, "competition_count": counts.get(slug, 0), "unread_count": unread_by_category.get(slug, 0)}
             for slug, (name, _) in CATEGORIES.items()]
 
 
@@ -101,6 +106,7 @@ async def checked_document(upload, kind, user, pilot):
 
 def pilot_view(db, pilot):
     data = serialize(pilot)
+    data["unread_count"] = competition_unread(db).get(pilot.id, 0)
     data["counts"] = dict(
         db.execute(
             select(PilotNomination.status, func.count())
@@ -196,7 +202,7 @@ def pilot_detail(id: UUID, user=Depends(current_user), db=Depends(get_db)):
 
 
 @router.delete("/{id}", response_model=ObjectView)
-def delete_pilot(id: UUID, data: PilotDeleteIn, user=Depends(require("judges")), db=Depends(get_db)):
+def delete_pilot(id: UUID, data: PilotDeleteIn, user=Depends(require("delete")), db=Depends(get_db)):
     pilot = active_competition(db, id)
     if not pilot.is_pilot:
         fail("permanent_competition", "Permanent competitions cannot be deleted.", 403)
@@ -296,12 +302,14 @@ def pilot_judges(
             PilotNomination.status == "awaiting_response",
             PilotNomination.last_contacted_at <= now() - timedelta(days=overdue_days),
         )
-    stmt = stmt.order_by(PilotNomination.created_at.desc())
+    unread = select(func.count()).select_from(InboundMessage).where(InboundMessage.judge_id == PilotNomination.judge_id, InboundMessage.read_at.is_(None), or_(InboundMessage.competition_id == id, InboundMessage.competition_id.is_(None))).correlate(PilotNomination).scalar_subquery()
+    stmt = stmt.order_by(unread.desc(), PilotNomination.created_at.desc())
 
     def view(nomination):
         judge = get(db, Judge, nomination.judge_id)
         return {
             **serialize(nomination),
+            "unread_count": db.scalar(select(func.count()).select_from(InboundMessage).where(InboundMessage.judge_id == nomination.judge_id, InboundMessage.read_at.is_(None), or_(InboundMessage.competition_id == id, InboundMessage.competition_id.is_(None)))),
             "judge": {
                 "id": str(judge.id),
                 "display_name": judge.display_name,

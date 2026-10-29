@@ -378,42 +378,6 @@ def judge_audit(
     )
 
 
-@app.get("/api/saved-lists", response_model=Page)
-def saved_lists(
-    page_no: int = Query(1, alias="page", ge=1),
-    page_size: int = Query(25, ge=1, le=100),
-    user=Depends(require("judges")),
-    db=Depends(get_db),
-):
-    return page(
-        db, select(SavedList).order_by(SavedList.created_at.desc()), page_no, page_size
-    )
-
-
-@app.post("/api/saved-lists", response_model=ObjectView)
-def save_list(data: SavedIn, user=Depends(require("judges")), db=Depends(get_db)):
-    permitted = {
-        "q",
-        "status",
-        "qualification",
-        "category",
-        "year",
-        "outcome",
-        "do_not_contact",
-        "not_contacted_year",
-        "sort",
-    }
-    if set(data.filter_definition) - permitted:
-        fail("invalid_filter", "Unsupported saved filter.")
-    # Validate typed filters now, not at campaign time.
-    judge_query(data.filter_definition)
-    item = SavedList(**data.model_dump(), created_by=user.id)
-    db.add(item)
-    audit(db, user, "list.created", item, f"Saved dynamic list {item.name}")
-    db.commit()
-    return serialize(item)
-
-
 @app.get("/api/audit-events", response_model=Page)
 def audit_events(
     q: str = "",
@@ -449,6 +413,7 @@ from .tickets import router as tickets_router
 from .dashboard import router as dashboard_router
 from .pilots import router as pilots_router
 from .directory import router as directory_router
+from .inbox import router as inbox_router
 
 app.include_router(imports_router)
 app.include_router(campaigns_router)
@@ -456,6 +421,7 @@ app.include_router(tickets_router)
 app.include_router(dashboard_router)
 app.include_router(pilots_router)
 app.include_router(directory_router)
+app.include_router(inbox_router)
 
 
 @app.get("/api/system")

@@ -8,3 +8,5 @@ docs/
 **/__pycache__
 **/.pytest_cache
 **/test-results
+
+.local-backups

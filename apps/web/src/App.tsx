@@ -12,7 +12,6 @@ import {
   Users,
   Upload,
   Copy,
-  Bookmark,
   Send,
   Inbox,
   LifeBuoy,
@@ -33,7 +32,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useData, useAction, User, Page, can, label } from "./api";
 import { Field, ErrorBox, Loading } from "./ui";
 import { Dashboard, AuditPage } from "./Overview";
-import { Judges, JudgeDetail, SavedLists } from "./Judges";
+import { JudgeConversation, Notifications } from "./Inbox";
 import { JudgeDirectory } from "./JudgeDirectory";
 import { Imports, ImportWizard, Duplicates, DuplicateDetail } from "./Imports";
 import { Campaigns, CampaignNew, CampaignDetail, Outbox } from "./Campaigns";
@@ -121,13 +120,12 @@ const navGroups = [
       ["/judges", "Judge directory", Users, "judges"],
       ["/imports", "Imports", Upload, "imports"],
       ["/duplicates", "Duplicate review", Copy, "imports"],
-      ["/saved-lists", "Saved lists", Bookmark, "judges"],
       ["/competitions", "Competitions", FolderKanban, "judges"],
       ["/campaigns", "Campaigns", Send, "campaigns"],
       ["/outbox", "Sandbox outbox", Inbox, "outbox"],
     ],
   },
-  { label: "Competitor tickets", items: [["/tickets", "Tickets", LifeBuoy, "tickets"]] },
+  { label: "Competitions tickets", items: [["/tickets", "Tickets", LifeBuoy, "tickets"]] },
   {
     label: "Administration",
     items: [
@@ -307,6 +305,7 @@ export default function App() {
             <div className="sandbox">
               <ShieldCheck size={15} /> SANDBOX EMAIL MODE
             </div>
+            <Notifications />
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <div className="user">
               <span className="avatar">
@@ -336,8 +335,8 @@ export default function App() {
               />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/judges" element={<JudgeDirectory />} />
-              <Route path="/contacts" element={<Judges />} />
-              <Route path="/judges/:id" element={<JudgeDetail />} />
+              <Route path="/contacts" element={<Navigate to="/judges" replace />} />
+              <Route path="/judges/:id" element={<Guard permission="campaigns"><JudgeConversation /></Guard>} />
               <Route
                 path="/imports"
                 element={
@@ -379,14 +378,6 @@ export default function App() {
                 }
               />
               <Route
-                path="/saved-lists"
-                element={
-                  <Guard permission="judges">
-                    <SavedLists />
-                  </Guard>
-                }
-              />
-              <Route
                 path="/competitions"
                 element={<Guard permission="judges"><Competitions /></Guard>}
               />
@@ -400,6 +391,7 @@ export default function App() {
               />
               <Route path="/pilots" element={<Navigate to="/competitions" replace />} />
               <Route path="/pilots/:id" element={<Guard permission="judges"><PilotDetail /></Guard>} />
+              <Route path="/campaigns/conversations/judges/:id" element={<Guard permission="campaigns"><JudgeConversation /></Guard>} />
               <Route
                 path="/campaigns"
                 element={

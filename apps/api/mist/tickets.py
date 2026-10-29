@@ -12,7 +12,7 @@ from .schemas import (
     Page,
     Input,
 )
-from .auth import current_user, allowed, fail
+from .auth import current_user, allowed, fail, COMPETITIONS_ROLES
 from .services import *
 
 router = APIRouter(prefix="/api")
@@ -32,7 +32,7 @@ def ticket_scope(user):
         return stmt
     if user.role == "support_staff":
         return stmt.where(Ticket.assigned_user_id == user.id)
-    if user.role == "competitions_administrator":
+    if user.role in COMPETITIONS_ROLES:
         return stmt.where(
             or_(
                 Ticket.category_id.is_not(None),
@@ -203,7 +203,7 @@ def tickets(
 def create(data: TicketIn, user=Depends(ticket_user), db=Depends(get_db)):
     if user.role == "support_staff":
         fail("forbidden", "An organizer must create and assign tickets.", 403)
-    address = safe_email(data.requester_email)
+    address = contact_email(data.requester_email)
     if data.category_id:
         get(db, Category, data.category_id)
     if data.committee_id:
@@ -232,7 +232,9 @@ def create(data: TicketIn, user=Depends(ticket_user), db=Depends(get_db)):
             created_by=user.id,
         )
     )
-    audit(db, user, "ticket.created", ticket, "Simulated competitor ticket created")
+    audit(db, user, "ticket.created", ticket, "Incoming competitions ticket created")
+    from .inbox import notify
+    notify(db, "ticket", f"New ticket: {ticket.requester_name}", ticket.subject, f"/tickets/{ticket.id}", ticket_id=ticket.id)
     db.commit()
     return serialize(ticket)
 
@@ -320,7 +322,7 @@ def reply(id: UUID, data: Content, user=Depends(ticket_user), db=Depends(get_db)
             )
         )
     message = Outbound(
-        recipient_email=safe_email(ticket.requester_email),
+        recipient_email=contact_email(ticket.requester_email),
         recipient_name=ticket.requester_name,
         subject=f"Re: {ticket.public_number} — {ticket.subject}",
         body_text=clean(data.body),

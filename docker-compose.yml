@@ -6,6 +6,8 @@ x-api: &api
   environment: &env
     DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mist}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-mist}
     SEED_PASSWORD: ${SEED_PASSWORD:?Set SEED_PASSWORD in .env}
+    COMPETITIONS_CHAIR_PASSWORD: ${COMPETITIONS_CHAIR_PASSWORD:-}
+    COMPETITIONS_MEMBER_PASSWORD: ${COMPETITIONS_MEMBER_PASSWORD:-}
     COOKIE_SECURE: ${COOKIE_SECURE:-false}
     IMPORT_MAX_BYTES: ${IMPORT_MAX_BYTES:-2097152}
     IMPORT_MAX_ROWS: ${IMPORT_MAX_ROWS:-5000}
@@ -63,6 +65,8 @@ services:
     environment:
       <<: *env
       DATABASE_URL: postgresql+psycopg://mist:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db-test:5432/mist_test
+      COMPETITIONS_CHAIR_PASSWORD: ""
+      COMPETITIONS_MEMBER_PASSWORD: ""
     depends_on:
       db-test:
         condition: service_healthy

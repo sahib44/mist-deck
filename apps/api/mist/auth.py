@@ -12,6 +12,7 @@ from .models import User, Session
 hasher = PasswordHasher()
 ROLE_PERMISSIONS = {
     "director": {
+        "delete",
         "judges",
         "imports",
         "campaigns",
@@ -34,6 +35,12 @@ ROLE_PERMISSIONS = {
     },
     "support_staff": {"tickets"},
 }
+
+
+COMPETITIONS_ROLES = {"competitions_administrator", "competitions_member", "competitions_chair"}
+for role in COMPETITIONS_ROLES:
+    ROLE_PERMISSIONS[role] = {"judges", "imports", "campaigns", "approve", "tickets", "catalogs", "outbox"}
+ROLE_PERMISSIONS["competitions_chair"].add("delete")
 
 
 def allowed(user, permission):

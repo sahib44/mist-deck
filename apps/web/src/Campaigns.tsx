@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Link,
   useParams,
@@ -9,6 +9,8 @@ import {
 import { Plus, Send, Mail, ShieldCheck } from "lucide-react";
 import { useData, useAction, api, Page, Row, can, label, date } from "./api";
 import { useUser } from "./App";
+import { RecipientPicker, EmailRecipient } from "./Recipients";
+import { Conversations, SimulateIncoming } from "./Inbox";
 import {
   Heading,
   Panel,
@@ -29,19 +31,19 @@ export function Campaigns() {
     <>
       <Heading
         title="Outreach campaigns"
-        description="Personal invitations. Individual messages. Shared oversight."
+
       >
+        <SimulateIncoming />
         <Link className="button primary" to="/campaigns/new">
           <Plus size={16} /> Create campaign
         </Link>
       </Heading>
       <div className="toolbar">
+        <input aria-label="Search outreach campaigns" placeholder="Search campaigns, names, or emails" value={params.get("q") || ""} onChange={e => { const next = new URLSearchParams(params); next.delete("page"); e.target.value ? next.set("q", e.target.value) : next.delete("q"); setParams(next); }} />
         <select
           aria-label="Campaign status"
           value={params.get("status") || ""}
-          onChange={(e) =>
-            setParams(e.target.value ? { status: e.target.value } : {})
-          }
+          onChange={e => { const next = new URLSearchParams(params); next.delete("page"); e.target.value ? next.set("status", e.target.value) : next.delete("status"); setParams(next); }}
         >
           <option value="">All campaigns</option>
           {[
@@ -58,6 +60,8 @@ export function Campaigns() {
           ))}
         </select>
       </div>
+      <Conversations search={params.get("q") || ""} judgeId={params.get("judge") || ""} />
+      <h2 className="campaign-list-heading">Campaigns</h2>
       <ErrorBox error={query.error} />
       {query.isPending ? (
         <Loading />
@@ -94,8 +98,7 @@ export function Campaigns() {
           </table>
           {query.data?.total === 0 && (
             <Empty>
-              Create your first campaign from a saved list or selected judge
-              contacts.
+              No campaigns match this view. Create a campaign to add recipients.
             </Empty>
           )}
           <Pagination
@@ -116,8 +119,15 @@ export function CampaignNew() {
   const pilot = useData<Row>(`/competitions/${pilotId}`, !!pilotId);
   const location = useLocation();
   const ids: string[] = location.state?.judge_ids || [];
-  const [list, setList] = useState(params.get("list") || "");
-  const lists = useData<Page>("/saved-lists?page_size=100");
+  const [recipients, setRecipients] = useState<EmailRecipient[]>([]);
+  const initial = useData<Row[]>(`/recipient-search?ids=${ids.join(",")}`, ids.length > 0);
+  const [initialized, setInitialized] = useState(false);
+  useEffect(() => {
+    if (!initialized && initial.data) {
+      setRecipients(initial.data.map(item => ({ key: item.id, judge_id: item.id, name: item.name, email: item.email })));
+      setInitialized(true);
+    }
+  }, [initial.data, initialized]);
   const action = useAction();
   const navigate = useNavigate();
   const [excluded, setExcluded] = useState<any[]>([]);
@@ -128,7 +138,7 @@ export function CampaignNew() {
       <Back to={pilotId && pilot.data ? `/competitions/${pilot.data.category_slug}/${pilotId}` : "/campaigns"}>{pilotId ? "Competition" : "Campaigns"}</Back>
       <Heading
         title={pilotId ? `Compose for ${pilot.data?.name || "competition"}` : "Compose an invitation"}
-        description="Each judge receives a separate, personalized sandbox message."
+        description="Each recipient receives a separate sandbox message."
       />
       <form
         onSubmit={async (e) => {
@@ -141,8 +151,8 @@ export function CampaignNew() {
                 name: fd.get("name"),
                 subject_template: fd.get("subject"),
                 body_template: fd.get("body"),
-                judge_ids: ids,
-                saved_list_id: list || null,
+                judge_ids: recipients.filter(r => r.judge_id).map(r => r.judge_id),
+                recipients: recipients.filter(r => !r.judge_id).map(r => ({ email: r.email, name: r.name, add_to_directory: !!r.add_to_directory })),
                 pilot_competition_id: pilotId,
                 variables: {
                   event_name: fd.get("event_name"),
@@ -179,31 +189,9 @@ export function CampaignNew() {
                 placeholder="Arts judges · Spring invitation"
               />
             </Field>
-            <Field label="Recipients">
-              {ids.length ? (
-                <div className="notice">
-                  {ids.length} selected judge contacts
-                </div>
-              ) : (
-                <select
-                  required
-                  value={list}
-                  onChange={(e) => setList(e.target.value)}
-                >
-                  <option value="">Choose a saved list</option>
-                  {lists.data?.items.map((r) => (
-                    <option value={r.id} key={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </Field>
-            {!ids.length && (
-              <p className="caption">
-                Or <Link to="/judges">select contacts in the directory</Link>.
-              </p>
-            )}
+            <h3>Recipients</h3>
+            <RecipientPicker recipients={recipients} onChange={setRecipients} />
+            <ErrorBox error={initial.error} />
             <div className="form-grid">
               <Field label="Event name">
                 <input
@@ -268,7 +256,7 @@ export function CampaignNew() {
         <ErrorBox error={action.error || fileError} />
         <div className="form-footer">
           <Link to="/campaigns">Cancel</Link>
-          <button className="primary" disabled={action.isPending || !!created}>
+          <button className="primary" disabled={action.isPending || !!created || !recipients.length || (ids.length > 0 && !initialized)}>
             <Mail size={16} /> Create draft & preview
           </button>
         </div>
@@ -307,8 +295,9 @@ export function RecipientPreview({ recipients }: { recipients: Row[] }) {
           >
             <Mail size={16} />
             <span>
-              {r.recipient_email}
-              <small>{label(r.status)}</small>
+              {r.recipient_name || r.recipient_email}
+              <small>{r.recipient_email} · {label(r.status)}</small>
+              {r.failure_reason && <small className="delivery-failure">{r.failure_reason}</small>}
             </span>
           </button>
         ))}
@@ -364,8 +353,9 @@ export function CampaignDetail() {
         </div>
       </div>
       <ErrorBox error={action.error} />
+      {!!c.failed_recipients?.length && <div className="error-box" role="alert"><strong>Delivery failed for:</strong>{c.failed_recipients.map((recipient: Row) => <p key={recipient.id}>{recipient.recipient_name} · {recipient.recipient_email}: {recipient.failure_reason}</p>)}</div>}
       <Panel title="Attachments">
-        {c.attachments?.length ? <ul className="attachment-list">{c.attachments.map((file: Row) => <li key={file.id}><a href={`/api/campaigns/${id}/attachments/${file.id}`}>{file.filename}</a> <small>({Math.ceil(file.size / 1024)} KB)</small>{c.status === "draft" && <button onClick={() => action.mutate({ path: `/campaigns/${id}/attachments/${file.id}`, method: "DELETE" })}>Remove</button>}</li>)}</ul> : <p className="caption">No files attached.</p>}
+        {c.attachments?.length ? <ul className="attachment-list">{c.attachments.map((file: Row) => <li key={file.id}><a href={`/api/campaigns/${id}/attachments/${file.id}`}>{file.filename}</a> <small>({Math.ceil(file.size / 1024)} KB)</small>{c.status === "draft" && can(user, "delete") && <button onClick={() => action.mutate({ path: `/campaigns/${id}/attachments/${file.id}`, method: "DELETE" })}>Remove</button>}</li>)}</ul> : <p className="caption">No files attached.</p>}
         {c.status === "draft" && <Field label="Add file (PDF, DOCX, PNG, JPG, TXT, or CSV; 5 MB max)"><input type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.txt,.csv" onChange={async e => { const file = e.target.files?.[0]; if (!file) return; const body = new FormData(); body.set("file", file); try { await api(`/campaigns/${id}/attachments`, "POST", body); setFileError(undefined); query.refetch(); e.target.value = ""; } catch (cause) { setFileError(cause); } }} /></Field>}
         <ErrorBox error={fileError} />
       </Panel>

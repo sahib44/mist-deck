@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { FileText, Mail, Plus, Trash2, Upload, Users } from "lucide-react";
 import { useAction, useData, Page, Row, can, date } from "./api";
 import { useUser } from "./App";
+import { UnreadMarker } from "./Inbox";
 import { Back, Empty, ErrorBox, Field, Heading, Loading, Modal, Pagination, Panel } from "./ui";
 
 const stages = [
@@ -13,7 +14,7 @@ const stages = [
   ["declined", "Declined"],
 ] as const;
 
-type Category = { slug: string; name: string; competition_count: number };
+type Category = { slug: string; name: string; competition_count: number; unread_count: number };
 
 export function Competitions() {
   const categories = useData<Category[]>("/competitions/categories");
@@ -24,7 +25,7 @@ export function Competitions() {
     {categories.isPending ? <Loading /> : <div className="pilot-grid">
       {categories.data?.map((category) => <Link className="pilot-card" to={`/competitions/${category.slug}`} key={category.slug}>
         <span className="pilot-card-icon"><Users size={20} /></span>
-        <strong>{category.name}</strong>
+        <strong>{category.name} <UnreadMarker count={category.unread_count} /></strong>
         <small>{category.competition_count} competitions</small>
       </Link>)}
     </div>}
@@ -69,7 +70,7 @@ export function CompetitionCategory() {
             <Link className="pilot-card" to={`/competitions/${category}/${pilot.id}`} key={pilot.id}>
               <span className="pilot-card-icon"><Users size={20} /></span>
               {pilot.is_pilot && <span className="pilot-card-year">PILOT · {pilot.event_year}</span>}
-              <strong>{pilot.name}</strong>
+              <strong>{pilot.name} <UnreadMarker count={pilot.unread_count} /></strong>
               <span>{Object.values(pilot.counts || {}).reduce((sum: number, n: any) => sum + Number(n), 0)} judges</span>
               <small>{pilot.documents?.length || 0} documents</small>
             </Link>
@@ -114,6 +115,7 @@ export function CompetitionCategory() {
 }
 
 export function PilotDetail() {
+  const user = useUser();
   const { id = "" } = useParams();
   const pilot = useData<Row>(`/competitions/${id}`);
   const action = useAction();
@@ -152,7 +154,7 @@ export function PilotDetail() {
       <Back to={`/competitions/${details.category_slug}`}>Competitions</Back>
       <Heading eyebrow={details.is_pilot ? `PILOT · ${details.event_year}` : `COMPETITION · ${details.event_year}`} title={details.name}>
         <button className="primary" onClick={() => setAdding(true)}><Plus size={16} /> Add judge</button>
-        {details.is_pilot && <button className="pilot-delete" onClick={() => setDeleteStep(1)}><Trash2 size={16} /> Delete pilot</button>}
+        {details.is_pilot && can(user, "delete") && <button className="pilot-delete" onClick={() => setDeleteStep(1)}><Trash2 size={16} /> Delete pilot</button>}
       </Heading>
       <div className="pilot-summary">
         <button onClick={() => changeFilter("", false)} className={!status && !overdue ? "active" : ""}><strong>{Object.values(details.counts || {}).reduce((sum: number, n: any) => sum + Number(n), 0)}</strong><span>All judges</span></button>
@@ -190,7 +192,7 @@ export function PilotDetail() {
               <article className="pilot-judge" key={nomination.id}>
                 <input type="checkbox" aria-label={`Select ${nomination.judge.display_name}`} checked={selected.includes(nomination.id)} onChange={(e) => setSelected(e.target.checked ? [...selected, nomination.id] : selected.filter((x) => x !== nomination.id))} />
                 <div className="pilot-judge-main">
-                  <Link to={`/judges/${nomination.judge.id}`}><strong>{nomination.judge.display_name}</strong></Link>
+                  <Link to={`/campaigns/conversations/judges/${nomination.judge.id}`}><strong>{nomination.judge.display_name}</strong></Link> <UnreadMarker count={nomination.unread_count} />
                   <small>{nomination.judge.primary_email || "No email"}{nomination.judge.phone ? ` · ${nomination.judge.phone}` : ""}</small>
                   {(nomination.qualification_text || !!nomination.judge.qualifications?.length) && <p className="caption">{nomination.qualification_text || nomination.judge.qualifications.join("; ")}</p>}
                   {nomination.last_contacted_at && <small>Awaiting since {date(nomination.last_contacted_at)}</small>}

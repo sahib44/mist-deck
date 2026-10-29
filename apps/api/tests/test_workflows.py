@@ -396,7 +396,7 @@ def test_competitions_ticket_scope_and_approval_grant(client):
         )
     )
     users = ok(client.get("/api/users"))["items"]
-    comp = next(u for u in users if u["role"] == "competitions_administrator")
+    comp = next(u for u in users if u["role"] == "competitions_member")
     ok(
         client.patch(
             "/api/users/" + comp["id"],
@@ -408,41 +408,13 @@ def test_competitions_ticket_scope_and_approval_grant(client):
     assert ok(client.get("/api/tickets"))["total"] == 0
     c = make_campaign(client)
     ok(client.post(f'/api/campaigns/{c["id"]}/submit'))
-    assert client.post(f'/api/campaigns/{c["id"]}/approve').status_code == 403
+    assert client.post(f'/api/campaigns/{c["id"]}/approve').status_code == 200
     assert client.get("/api/audit-events").status_code == 403
 
 
-def test_saved_lists_remain_dynamic(director):
-    saved = ok(
-        director.post(
-            "/api/saved-lists",
-            json={
-                "name": "Arts",
-                "filter_definition": {"qualification": "Arts", "status": "prospective"},
-            },
-        )
-    )
-    first = ok(director.get("/api/judges?qualification=Arts&status=prospective"))[
-        "items"
-    ][0]
-    ok(
-        director.post(
-            "/api/judges/bulk",
-            json={"ids": [first["id"]], "status": "inactive", "confirmed": True},
-        )
-    )
-    c = ok(
-        director.post(
-            "/api/campaigns",
-            json={
-                "name": "Dynamic",
-                "subject_template": "Hello",
-                "body_template": "Hello {{judge_name}}",
-                "saved_list_id": saved["id"],
-            },
-        )
-    )
-    assert c["recipient_count"] == 5
+def test_saved_lists_are_removed(director):
+    assert director.get("/api/saved-lists").status_code == 404
+    assert director.post("/api/saved-lists", json={"name": "Retired"}).status_code == 404
 
 
 def test_deduplicates_different_contacts_sharing_email(director):

@@ -11,14 +11,14 @@ names, organizations, and addresses are fabricated. Campaign delivery writes
 only to a local sandbox outbox; it does not send email.
 
 The prototype currently supports role-based sign-in, a competition-based judge directory,
-CSV column mapping and duplicate merge review, saved lists, competition
+CSV column mapping and duplicate merge review, direct recipient search, competition
 workspaces, campaign preview and approval, a PostgreSQL-backed sandbox worker,
 support tickets with private notes, dashboard metrics, and an audit trail.
 
 **SANDBOX EMAIL MODE: no real email can be sent.** The only provider is a database
 mock. Contact records may hold syntactically valid addresses, but a queued pilot
-message produces only a local mock receipt. General campaigns and ticket replies
-still require `example.com`, `example.org`, or `example.net` addresses. There are
+message produces only a local mock receipt. Campaigns and ticket replies accept syntactically valid email addresses but only
+produce local mock receipts. There are
 no SMTP credentials, email provider SDKs, domain lookups, or tracking pixels.
 
 ## Start locally
@@ -44,14 +44,15 @@ retained. No public deployment is configured.
 
 ## Development accounts
 
-All four fabricated development accounts use the `SEED_PASSWORD` value in your
-local `.env` file:
+The five fabricated development accounts use `SEED_PASSWORD` in your local `.env`
+file unless separate chair/member passwords are configured:
 
 | Email | Role | Additional permissions |
 | --- | --- | --- |
 | `director@example.com` | Director | All application capabilities |
 | `tech@example.com` | Technology Administrator | Imports, catalogs, job troubleshooting, audit; no private tickets |
-| `competitions@example.com` | Competitions Administrator | `campaign_approver` |
+| `chair@example.com` | Competitions Chair | Everyday competition tools, approvals, pilot deletion, backed-up directory clearing |
+| `competitions@example.com` | Shared Competition Heads | Everyday competition tools and approvals; no deletion |
 | `support@example.com` | Support Staff | Assigned tickets only |
 
 Passwords are stored as Argon2id hashes. Login creates a random, 12-hour HttpOnly,
@@ -72,7 +73,8 @@ from `POSTGRES_PASSWORD`. Secrets are passed to services as environment variable
 | `POSTGRES_PASSWORD` | Required local PostgreSQL password; set in `.env` |
 | `POSTGRES_DB` | `mist` |
 | `DATABASE_URL` | Required by Python when run outside Compose; Compose assembles it from the database variables |
-| `SEED_PASSWORD` | Required local demo-account password; used only when seeding an empty database |
+| `SEED_PASSWORD` | Required local demo-account password; used for initial accounts and any newly added demo roles |
+| `COMPETITIONS_CHAIR_PASSWORD` / `COMPETITIONS_MEMBER_PASSWORD` | Optional separate local test-role passwords; otherwise `SEED_PASSWORD` |
 | `COOKIE_SECURE` | `false` for local HTTP; use `true` behind HTTPS |
 | `IMPORT_MAX_BYTES` | `2097152` |
 | `IMPORT_MAX_ROWS` | `5000` |
@@ -103,10 +105,10 @@ the working workflows.
 5. Return to the import, continue to commit, check the confirmation, and commit.
    Invalid rows remain downloadable in the error CSV.
 6. Open Judge directory to review competition, response, contact, and written
-   qualification. Export the current view as a spreadsheet-ready CSV. Open
-   **Contact tools** to use legacy contact filters and save a dynamic list.
-7. Open the saved list and create a campaign. Preview each recipient, submit,
-   approve, and queue. The seeded competitions account has the approval grant.
+   qualification. Export the current view as a spreadsheet-ready CSV.
+7. Select judges and email them, or create a campaign and search recipients by name
+   or email. Add one-off addresses with an optional switch to save them as judges.
+   Each recipient appears as a removable name chip. Preview, submit, approve and queue.
 8. Watch separate messages appear in Sandbox outbox. No message has multiple
    recipients. The worker runs automatically.
 9. Create a simulated ticket, choose a category, and assign Demo Support. Add an
@@ -241,7 +243,7 @@ Full browser scenario uses a separate Compose project and database volume:
 The test-only app is at http://localhost:15173. Run all layers with
 `./scripts/test.sh`. Browser traces/reports go under `apps/web/test-results` and
 `apps/web/playwright-report`. The browser scenarios exercise the CSV → duplicate
-review → dynamic list → campaign approval → worker → outbox → ticket → audit flow
+review → recipient selection → campaign approval → worker → outbox → ticket → audit flow
 and the competition category → judge response → filtered selection → sandbox flow.
 The runner resets only its dedicated `mist_e2e` database before each run. It
 requires both the exact database name and an explicit test-reset environment flag.
@@ -323,7 +325,7 @@ not evidence of external deliverability.
 
 ## Verified local build
 
-The final run passed **31 backend tests, 7 frontend tests, and 3 Playwright
+The final run passed **41 backend tests, 9 frontend tests, and 4 Playwright
 scenarios**, plus TypeScript compilation, Docker startup and Alembic consistency.
 See [validation details](docs/validation.md) and the
 [requirements map](docs/requirements-matrix.md).
@@ -331,3 +333,32 @@ See [validation details](docs/validation.md) and the
 ![Dashboard with fabricated local test data](docs/screenshots/dashboard.png)
 
 [View the tablet layout](docs/screenshots/tablet.png)
+
+
+## Shared inbox and team permissions
+
+The chair and shared category-head accounts can both manage contacts, competition
+judges, imports, campaigns, approvals, and competitions tickets. Only the chair
+and director can delete pilots or clear the judge directory. Permanent MIST
+competitions remain protected for every role. Directory clearing has two warnings,
+automatic CSV export and a final signed-in-account password check. A stored copy
+of the export remains available after clearing; existing email history is retained.
+If contacts change after the export, clearing stops until a fresh backup is made.
+
+Campaign search matches names, subjects, recipient names and recipient emails.
+Notifications identify failed recipients, incoming judge messages and ticket
+emails. Unread judge replies appear in red in the campaigns conversation list and
+add an exclamation mark to the matching category, competition and judge. Judges
+with unread replies appear first. Opening the judge conversation marks the
+currently received messages as read for the shared workspace. Later replies remain
+unread. Clicking a judge's name always opens their email conversation.
+
+A live mailbox is **not connected**. Use **Simulate incoming email** on Campaigns
+to test receiving. Messages from known judge addresses become judge conversations;
+other incoming addresses become competitions tickets without entering the judge
+directory. When a judge has multiple campaigns, the simulator associates the reply
+with their most recently sent email. The API also accepts an explicit campaign
+recipient ID to disambiguate a thread. Real mailbox synchronization and real
+delivery require a future provider integration.
+
+Saved lists and the former contact-tools screen have been removed.

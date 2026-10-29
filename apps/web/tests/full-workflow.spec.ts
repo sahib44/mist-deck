@@ -21,7 +21,7 @@ test("organizer imports, reviews, campaigns, and resolves a support ticket", asy
   };
   await login("competitions@example.com");
   await expect(page.getByRole("navigation", { name: "Judge handling" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Competitor tickets" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Competitions tickets" })).toBeVisible();
   await page.getByRole("button", { name: "Switch to dark mode" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.reload();
@@ -96,25 +96,10 @@ test("organizer imports, reviews, campaigns, and resolves a support ticket", asy
   await expect(
     page.getByRole("heading", { name: "Import complete" }),
   ).toBeVisible();
-  await page.goto("/contacts");
-  await page.getByLabel("Qualification", { exact: true }).selectOption("Arts");
-  await expect(page).toHaveURL(/qualification=Arts/);
-  await page.getByRole("button", { name: "Save list", exact: true }).click();
-  await page.getByLabel("List name").fill("Arts E2E " + stamp);
-  await page
-    .getByRole("button", { name: "Save dynamic list", exact: true })
-    .click();
-  await expect(page.getByRole("status")).toContainText("Dynamic list saved");
-  await page.goto("/saved-lists");
-  const list = page
-    .locator("section.panel")
-    .filter({
-      has: page.getByRole("heading", {
-        name: "Arts E2E " + stamp,
-        exact: true,
-      }),
-    });
-  await list.getByRole("link", { name: "Create campaign" }).click();
+  await page.goto("/judges");
+  await page.getByLabel("Select visible judges").check();
+  await page.getByRole("button", { name: "Email selected", exact: true }).click();
+  await expect(page.getByLabel("Selected recipients")).not.toBeEmpty();
   await page
     .getByLabel("Campaign name", { exact: true })
     .fill("Arts invitation " + stamp);
@@ -123,6 +108,8 @@ test("organizer imports, reviews, campaigns, and resolves a support ticket", asy
     .getByLabel("Response deadline", { exact: true })
     .fill(dateFromNow(14));
   await page.getByRole("button", { name: "Create draft & preview" }).click();
+  await expect(page.getByRole("heading", { name: "Review recipient exclusions", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Continue to preview", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Arts invitation " + stamp }),
   ).toBeVisible();

@@ -89,7 +89,7 @@ def deliver(db, id, worker_id):
     if msg.status != "sending" or msg.claimed_by != worker_id:
         db.rollback()
         return
-    judge = db.get(Judge, rec.judge_id) if rec else None
+    judge = db.get(Judge, rec.judge_id) if rec and rec.judge_id else None
     if (campaign and campaign.status == "cancelled") or (
         judge and (judge.do_not_contact or judge.merged_into_id)
     ):
@@ -106,7 +106,7 @@ def deliver(db, id, worker_id):
             msg.status, msg.completed_at, msg.last_error = "sent", now(), ""
             if rec:
                 rec.status, rec.sent_at = "sent", now()
-                if campaign.pilot_competition_id:
+                if judge and campaign.pilot_competition_id:
                     nomination = db.scalar(
                         select(PilotNomination).where(
                             PilotNomination.pilot_id == campaign.pilot_competition_id,
@@ -116,8 +116,13 @@ def deliver(db, id, worker_id):
                     if nomination and nomination.status in {"to_contact", "awaiting_response"}:
                         nomination.status = "awaiting_response"
                         nomination.last_contacted_at = now()
-                else:
+                if judge:
                     judge.last_contacted_at = now()
+                    if judge.status in {"prospective", "to_contact", "contacted", "awaiting_response"}:
+                        judge.status = "awaiting_response"
+                    if not campaign.pilot_competition_id:
+                        for nomination in db.scalars(select(PilotNomination).where(PilotNomination.judge_id == judge.id, PilotNomination.status.in_(["to_contact", "awaiting_response"]))):
+                            nomination.status, nomination.last_contacted_at = "awaiting_response", now()
         except Exception as exc:
             msg.last_error = (
                 "Simulated sandbox delivery failure"
@@ -137,6 +142,9 @@ def deliver(db, id, worker_id):
             f"Sandbox attempt {msg.attempt_count}: {msg.status}",
             after={"status": msg.status, "attempt_count": msg.attempt_count},
         )
+    if msg.status == "failed":
+        from .inbox import notify
+        notify(db, "delivery_failed", f"Email failed: {msg.recipient_name or msg.recipient_email}", f"{msg.recipient_email}: {msg.last_error}", f"/campaigns/{campaign.id}" if campaign else f"/tickets/{msg.related_ticket_id}" if msg.related_ticket_id else f"/outbox?q={msg.recipient_email}", outbound_id=msg.id, judge_id=judge.id if judge else None, ticket_id=msg.related_ticket_id)
     msg.claimed_at, msg.claimed_by = None, None
     if campaign:
         aggregate(db, campaign)

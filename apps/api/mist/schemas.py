@@ -44,7 +44,8 @@ class CatalogIn(Input):
 
 
 JudgeStatus = Literal[
-    "prospective", "contacted", "interested", "confirmed", "declined", "inactive"
+    "prospective", "contacted", "interested", "confirmed", "declined", "inactive",
+    "to_contact", "awaiting_response", "accepted"
 ]
 
 
@@ -89,10 +90,10 @@ class Resolve(Input):
     confirmed: bool
 
 
-class SavedIn(Input):
-    name: str = Field(min_length=1, max_length=200)
-    description: str = Field(default="", max_length=5000)
-    filter_definition: dict[str, str] = Field(default_factory=dict)
+class DirectRecipient(Input):
+    email: str = Field(min_length=3, max_length=254)
+    name: str = Field(default="", max_length=400)
+    add_to_directory: bool = False
 
 
 class CampaignIn(Input):
@@ -100,7 +101,7 @@ class CampaignIn(Input):
     subject_template: str = Field(min_length=1, max_length=500)
     body_template: str = Field(min_length=1, max_length=30000)
     judge_ids: list[UUID] = Field(default_factory=list, max_length=5000)
-    saved_list_id: UUID | None = None
+    recipients: list[DirectRecipient] = Field(default_factory=list, max_length=5000)
     pilot_competition_id: UUID | None = None
     variables: dict[str, str] = Field(default_factory=dict)
 
@@ -166,6 +167,8 @@ class UserUpdate(Input):
         "director",
         "technology_administrator",
         "competitions_administrator",
+        "competitions_member",
+        "competitions_chair",
         "support_staff",
     ]
     permissions: list[Literal["campaign_approver", "private_tickets"]]
@@ -180,3 +183,23 @@ class MergeContacts(Input):
     merged_judge_id: UUID
     field_decisions: dict[str, Literal["existing", "incoming"]]
     confirmed: bool
+
+
+class ClearJudges(Input):
+    confirmed_first: bool
+    confirmed_second: bool
+    password: str = Field(min_length=1, max_length=200)
+    backup_id: UUID
+
+
+class IncomingEmail(Input):
+    sender_name: str = Field(default="", max_length=400)
+    sender_email: str = Field(min_length=3, max_length=254)
+    subject: str = Field(min_length=1, max_length=500)
+    body: str = Field(min_length=1, max_length=30000)
+    request_id: UUID
+    campaign_recipient_id: UUID | None = None
+
+
+class ConversationRead(Input):
+    read_through: datetime

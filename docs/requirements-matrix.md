@@ -6,7 +6,7 @@
 | Judge directory and history | `services.py`, judge endpoints, `Judges.tsx` | Filters, dynamic lists, bulk updates, merge history tests |
 | CSV wizard | `imports.py`, `Imports.tsx` | Mapping, malformed input, counts, error export; full browser flow |
 | Explainable duplicate review | `duplicate_match`, `merge_data`, `MergeFields` | All five levels, alternate emails, within-batch matches, preserved data |
-| Saved dynamic lists | `SavedList`, saved-list endpoints, `SavedLists` | Mutation changes later campaign recipients |
+| Recipient selection | Recipient search, named chips, one-off addresses, optional directory inclusion | Deduplication and separate sandbox messages |
 | Campaign composition / preview | `campaigns.py`, `Campaigns.tsx` | DNC, template variables, email deduplication, per-recipient browser previews |
 | Approval and cancellation | campaign transitions and backend grants | Unauthorized approval rejected; cancellation blocks claimed/queued jobs |
 | PostgreSQL queue / mock provider | `worker.py` | Real SKIP LOCKED, stale recovery, bounded retries, receipt idempotency |

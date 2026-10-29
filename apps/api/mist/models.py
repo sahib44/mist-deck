@@ -243,14 +243,6 @@ class MergeEvent(Record, Base):
     merged_at: Mapped[object] = mapped_column(DateTime(timezone=True), default=now)
 
 
-class SavedList(Record, Base):
-    __tablename__ = "saved_judge_lists"
-    name: Mapped[str] = mapped_column(String(200))
-    description: Mapped[str] = mapped_column(Text, default="")
-    filter_definition: Mapped[dict] = mapped_column(JSONB, default=dict)
-    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
-
-
 class Campaign(Record, Base):
     __tablename__ = "campaigns"
     name: Mapped[str] = mapped_column(String(200))
@@ -280,9 +272,10 @@ class Recipient(Record, Base):
     campaign_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("campaigns.id"), index=True
     )
-    judge_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("judge_contacts.id"), index=True
+    judge_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("judge_contacts.id", ondelete="SET NULL"), index=True
     )
+    recipient_name: Mapped[str] = mapped_column(String(400), default="")
     recipient_email: Mapped[str] = mapped_column(String(254))
     rendered_subject: Mapped[str] = mapped_column(Text)
     rendered_body: Mapped[str] = mapped_column(Text)
@@ -383,3 +376,38 @@ class Audit(Record, Base):
     summary: Mapped[str] = mapped_column(Text)
     before_data: Mapped[dict | None] = mapped_column(JSONB)
     after_data: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class InboundMessage(Record, Base):
+    __tablename__ = "inbound_messages"
+    judge_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("judge_contacts.id", ondelete="SET NULL"), index=True)
+    campaign_recipient_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("campaign_recipients.id"), index=True)
+    competition_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("pilot_competitions.id"), index=True)
+    ticket_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tickets.id"), index=True)
+    sender_name: Mapped[str] = mapped_column(String(400))
+    sender_email: Mapped[str] = mapped_column(String(254))
+    subject: Mapped[str] = mapped_column(Text)
+    body: Mapped[str] = mapped_column(Text)
+    request_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), unique=True)
+    read_at: Mapped[object | None] = mapped_column(DateTime(timezone=True))
+
+
+class Notification(Record, Base):
+    __tablename__ = "notifications"
+    kind: Mapped[str] = mapped_column(String(40), index=True)
+    title: Mapped[str] = mapped_column(String(500))
+    body: Mapped[str] = mapped_column(Text, default="")
+    href: Mapped[str] = mapped_column(Text)
+    judge_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("judge_contacts.id", ondelete="SET NULL"), index=True)
+    ticket_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tickets.id"), index=True)
+    outbound_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("outbound_messages.id"), unique=True)
+    read_at: Mapped[object | None] = mapped_column(DateTime(timezone=True))
+
+
+class DirectoryBackup(Record, Base):
+    __tablename__ = "directory_backups"
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    content: Mapped[bytes] = mapped_column(LargeBinary)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    judge_count: Mapped[int] = mapped_column(Integer)
+    cleared_at: Mapped[object | None] = mapped_column(DateTime(timezone=True))

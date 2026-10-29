@@ -16,3 +16,6 @@ test-results/
 *.sqlite3
 *.log
 docs/build-specification.md
+
+# Private snapshots taken before an explicitly requested local reset
+/.local-backups/

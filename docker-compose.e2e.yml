@@ -10,9 +10,13 @@ services:
   api:
     ports: !override ["127.0.0.1:18000:8000"]
     environment:
+      COMPETITIONS_CHAIR_PASSWORD: ""
+      COMPETITIONS_MEMBER_PASSWORD: ""
       DATABASE_URL: postgresql+psycopg://mist:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/mist_e2e
   worker:
     environment:
+      COMPETITIONS_CHAIR_PASSWORD: ""
+      COMPETITIONS_MEMBER_PASSWORD: ""
       DATABASE_URL: postgresql+psycopg://mist:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/mist_e2e
   e2e-reset:
     build:
@@ -20,6 +24,8 @@ services:
       dockerfile: apps/api/Dockerfile
     profiles: ["e2e"]
     environment:
+      COMPETITIONS_CHAIR_PASSWORD: ""
+      COMPETITIONS_MEMBER_PASSWORD: ""
       DATABASE_URL: postgresql+psycopg://mist:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/mist_e2e
       SEED_PASSWORD: ${SEED_PASSWORD:?Set SEED_PASSWORD in .env}
       MIST_E2E_RESET: '1'
