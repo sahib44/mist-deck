@@ -27,13 +27,14 @@ def test_judges_and_roles(director):
     assert director.get("/api/dashboard").status_code == 200
 
 
-def test_support_cannot_read_judges(client):
+def test_retired_support_login_has_no_access(client):
     import os
 
-    client.post(
+    response = client.post(
         "/api/auth/login",
         json={"email": "support@example.com", "password": os.environ["SEED_PASSWORD"]},
     )
-    assert client.get("/api/judges").status_code == 403
-    assert client.get("/api/imports").status_code == 403
-    assert client.get("/api/tickets").json()["total"] == 0
+    assert response.status_code == 401
+    assert client.get("/api/judges").status_code == 401
+    assert client.get("/api/imports").status_code == 401
+    assert client.get("/api/tickets").status_code == 401

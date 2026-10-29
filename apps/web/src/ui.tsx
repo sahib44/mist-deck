@@ -7,7 +7,7 @@ import {
   useEffect,
   useRef,
 } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AlertCircle, ArrowLeft, ArrowRight, X } from "lucide-react";
 import { Page, label } from "./api";
 export function ErrorBox({ error }: { error: unknown }) {
@@ -111,13 +111,15 @@ export function Panel({
   title,
   children,
   action,
+  className = "",
 }: {
   title: string;
   children: ReactNode;
   action?: ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="panel">
+    <section className={`panel ${className}`.trim()}>
       <header>
         <h2>{title}</h2>
         {action}
@@ -184,4 +186,14 @@ export function Back({ to, children }: { to: string; children: ReactNode }) {
       {children}
     </Link>
   );
+}
+
+
+export function HistoryBack() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const fallback = location.pathname === "/outbox" && params.get("ticket_id") ? `/tickets/${params.get("ticket_id")}` : "/dashboard";
+  const hasHistory = typeof window.history.state?.idx === "number" && window.history.state.idx > 0;
+  return <button type="button" className="history-back" aria-label="Go back" title="Back to the previous page" disabled={!hasHistory && location.pathname === fallback} onClick={() => hasHistory ? navigate(-1) : navigate(fallback)}><ArrowLeft size={17} /><span>Back</span></button>;
 }

@@ -30,7 +30,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useData, useAction, User, Page, can, label } from "./api";
-import { Field, ErrorBox, Loading } from "./ui";
+import { Field, ErrorBox, Loading, HistoryBack } from "./ui";
 import { Dashboard, AuditPage } from "./Overview";
 import { JudgeConversation, Notifications } from "./Inbox";
 import { JudgeDirectory } from "./JudgeDirectory";
@@ -270,6 +270,7 @@ export default function App() {
         </aside>
         <div className="main-shell">
           <header className="topbar">
+            <HistoryBack />
             <button
               className="menu-button"
               aria-label="Toggle navigation"

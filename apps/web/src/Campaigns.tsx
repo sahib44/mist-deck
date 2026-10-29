@@ -435,7 +435,7 @@ export function Outbox() {
         title="Sandbox outbox"
         description="Every outbound message, safely captured in your local database."
       />
-      <div className="review-callout">
+      <div className="review-callout outbox-reassurance">
         <ShieldCheck size={22} />
         <p>
           No email leaves this application. Delivery receipts below represent

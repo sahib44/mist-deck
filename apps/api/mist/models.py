@@ -298,16 +298,9 @@ class Ticket(Record, Base):
     requester_email: Mapped[str] = mapped_column(String(254))
     subject: Mapped[str] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(40), default="new", index=True)
-    priority: Mapped[str] = mapped_column(String(30), default="normal", index=True)
-    committee_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("committees.id"), index=True
-    )
-    category_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("competition_categories.id")
-    )
-    assigned_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id"), index=True
-    )
+    version: Mapped[int] = mapped_column(Integer, default=0)
+    resolution_note: Mapped[str] = mapped_column(Text, default="")
+    auto_close_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), index=True)
     source: Mapped[str] = mapped_column(String(40), default="manual")
     last_message_at: Mapped[object] = mapped_column(
         DateTime(timezone=True), default=now, index=True
@@ -363,6 +356,8 @@ class TicketMessage(Record, Base):
 class TicketNote(Record, Base):
     __tablename__ = "ticket_internal_notes"
     ticket_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tickets.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(30), default="internal")
+    request_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), unique=True)
     body: Mapped[str] = mapped_column(Text)
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
 
@@ -401,6 +396,8 @@ class Notification(Record, Base):
     judge_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("judge_contacts.id", ondelete="SET NULL"), index=True)
     ticket_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tickets.id"), index=True)
     outbound_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("outbound_messages.id"), unique=True)
+    recipient_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), index=True)
+    draft_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("ticket_drafts.id"), index=True)
     read_at: Mapped[object | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -411,3 +408,27 @@ class DirectoryBackup(Record, Base):
     fingerprint: Mapped[str] = mapped_column(String(64))
     judge_count: Mapped[int] = mapped_column(Integer)
     cleared_at: Mapped[object | None] = mapped_column(DateTime(timezone=True))
+
+
+class TicketDraft(Record, Base):
+    __tablename__ = "ticket_drafts"
+    ticket_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tickets.id"), index=True)
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    body: Mapped[str] = mapped_column(Text, default="")
+    target_status: Mapped[str] = mapped_column(String(40), default="")
+    resolution_note: Mapped[str] = mapped_column(Text, default="")
+    base_version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(30), default="pending_approval", index=True)
+    request_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), unique=True)
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    approved_at: Mapped[object | None] = mapped_column(DateTime(timezone=True))
+
+
+class TicketAction(Record, Base):
+    __tablename__ = "ticket_actions"
+    ticket_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tickets.id"), index=True)
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    request_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), unique=True)
+    signature: Mapped[str] = mapped_column(String(64))
+    result: Mapped[dict] = mapped_column(JSONB)

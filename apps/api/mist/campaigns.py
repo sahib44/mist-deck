@@ -386,6 +386,10 @@ def forward_message(id: UUID, data: ForwardIn, user=Depends(require("outbox")), 
     if not original or original.status != "sent":
         fail("invalid_forward", "Only sent sandbox messages can be forwarded.", 400)
     address = contact_email(data.recipient_email)
+    if original.related_ticket_id:
+        ticket = get(db, Ticket, original.related_ticket_id)
+        if address == ticket.requester_email and not allowed(user, "ticket_approve"):
+            fail("chair_approval_required", "Use the approved public reply flow to email this requester.", 403)
     note = clean(data.note).strip()
     subject = original.subject if original.subject.lower().startswith("fwd:") else f"Fwd: {original.subject}"
     body = f"{note}\n\n" if note else ""

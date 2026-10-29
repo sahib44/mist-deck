@@ -325,7 +325,7 @@ def test_cancellation_and_late_suppression_prevent_delivery(director):
     )
 
 
-def test_ticket_note_reply_assignment_privacy_and_lifecycle(director):
+def test_shared_ticket_notes_reply_privacy_and_lifecycle(director):
     client = director
     ticket = ok(
         client.post(
@@ -339,14 +339,7 @@ def test_ticket_note_reply_assignment_privacy_and_lifecycle(director):
         )
     )
     id = ticket["id"]
-    users = ok(client.get("/api/users"))["items"]
-    support = next(u for u in users if u["role"] == "support_staff")
-    ok(
-        client.post(
-            f"/api/tickets/{id}/assign", json={"assigned_user_id": support["id"]}
-        )
-    )
-    login(client, "support")
+    login(client, "competitions")
     assert client.get(f"/api/tickets/{id}").status_code == 200
     ok(
         client.post(
@@ -356,19 +349,15 @@ def test_ticket_note_reply_assignment_privacy_and_lifecycle(director):
     )
     with SessionLocal() as db:
         assert db.scalar(select(func.count()).select_from(Outbound)) == 0
+    login(client, "director")
     body = {"body": "A public answer", "request_id": str(uuid4())}
     ok(client.post(f"/api/tickets/{id}/messages", json=body))
     ok(client.post(f"/api/tickets/{id}/messages", json=body))
     assert ok(client.get(f"/api/tickets/{id}/messages"))["total"] == 2
     with SessionLocal() as db:
         assert db.scalar(select(func.count()).select_from(Outbound)) == 1
-    ok(client.post(f"/api/tickets/{id}/status", json={"status": "resolved"}))
-    assert (
-        client.post(
-            f"/api/tickets/{id}/assign", json={"assigned_user_id": None}
-        ).status_code
-        == 403
-    )
+    ok(client.post(f"/api/tickets/{id}/status", json={"status": "resolved", "resolution_note": "Answered the question."}))
+    assert client.post(f"/api/tickets/{id}/assign", json={"assigned_user_id": None}).status_code in {404, 405}
     login(client, "tech")
     assert client.get("/api/tickets").status_code == 403
     assert client.get(f"/api/tickets/{id}/notes").status_code == 403
@@ -404,8 +393,8 @@ def test_competitions_ticket_scope_and_approval_grant(client):
         )
     )
     login(client, "competitions")
-    assert client.get("/api/tickets/" + ticket["id"]).status_code == 404
-    assert ok(client.get("/api/tickets"))["total"] == 0
+    assert client.get("/api/tickets/" + ticket["id"]).status_code == 200
+    assert ok(client.get("/api/tickets"))["total"] == 1
     c = make_campaign(client)
     ok(client.post(f'/api/campaigns/{c["id"]}/submit'))
     assert client.post(f'/api/campaigns/{c["id"]}/approve').status_code == 200

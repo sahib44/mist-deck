@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -134,32 +134,29 @@ class TicketIn(Input):
     requester_email: str = Field(min_length=1, max_length=254)
     subject: str = Field(min_length=1, max_length=500)
     body: str = Field(min_length=1, max_length=30000)
-    committee_id: UUID | None = None
-    category_id: UUID | None = None
-    priority: Literal["low", "normal", "high", "urgent"] = "normal"
 
 
 class Content(Input):
     body: str = Field(min_length=1, max_length=30000)
     request_id: UUID
-
-
-class Assignment(Input):
-    assigned_user_id: UUID | None = None
-    committee_id: UUID | None = None
-    category_id: UUID | None = None
+    approval_id: UUID | None = None
 
 
 class TicketStatus(Input):
     status: Literal[
         "new",
-        "assigned",
+        "in_progress",
         "waiting_on_organizer",
         "waiting_on_requester",
         "resolved",
         "closed",
     ]
-    priority: Literal["low", "normal", "high", "urgent"] | None = None
+    reply_body: str = Field(default="", max_length=30000)
+    internal_note: str = Field(default="", max_length=30000)
+    resolution_note: str = Field(default="", max_length=30000)
+    request_id: UUID = Field(default_factory=uuid4)
+    approval_id: UUID | None = None
+    expected_version: int | None = None
 
 
 class UserUpdate(Input):
@@ -169,7 +166,6 @@ class UserUpdate(Input):
         "competitions_administrator",
         "competitions_member",
         "competitions_chair",
-        "support_staff",
     ]
     permissions: list[Literal["campaign_approver", "private_tickets"]]
     is_active: bool
@@ -203,3 +199,12 @@ class IncomingEmail(Input):
 
 class ConversationRead(Input):
     read_through: datetime
+
+
+class TicketDraftIn(Input):
+    kind: Literal["messages", "notes"]
+    body: str = Field(default="", max_length=30000)
+    target_status: str = Field(default="", max_length=40)
+    resolution_note: str = Field(default="", max_length=30000)
+    expected_version: int
+    request_id: UUID

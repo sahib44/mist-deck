@@ -13,6 +13,7 @@ hasher = PasswordHasher()
 ROLE_PERMISSIONS = {
     "director": {
         "delete",
+        "ticket_approve",
         "judges",
         "imports",
         "campaigns",
@@ -33,14 +34,13 @@ ROLE_PERMISSIONS = {
         "catalogs",
         "outbox",
     },
-    "support_staff": {"tickets"},
 }
 
 
 COMPETITIONS_ROLES = {"competitions_administrator", "competitions_member", "competitions_chair"}
 for role in COMPETITIONS_ROLES:
     ROLE_PERMISSIONS[role] = {"judges", "imports", "campaigns", "approve", "tickets", "catalogs", "outbox"}
-ROLE_PERMISSIONS["competitions_chair"].add("delete")
+ROLE_PERMISSIONS["competitions_chair"].update({"delete", "ticket_approve"})
 
 
 def allowed(user, permission):
@@ -62,7 +62,7 @@ def current_user(request: Request, db=Depends(get_db)):
         )
     )
     user = db.get(User, session.user_id) if session else None
-    if not user or not user.is_active:
+    if not user or not user.is_active or user.role not in ROLE_PERMISSIONS:
         fail("unauthenticated", "Please sign in.", 401)
     if (
         request.method not in {"GET", "HEAD", "OPTIONS"}
@@ -84,7 +84,7 @@ def require(permission):
 def login(db, email, password, response):
     user = db.scalar(
         select(User).where(
-            User.email == email.strip().lower(), User.is_active.is_(True)
+            User.email == email.strip().lower(), User.is_active.is_(True), User.role.in_(ROLE_PERMISSIONS)
         )
     )
     try:

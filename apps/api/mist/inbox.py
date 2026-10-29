@@ -31,7 +31,7 @@ def notification_scope(user):
         clauses.append(Notification.kind.in_(["judge_reply", "delivery_failed"]) & Notification.ticket_id.is_(None))
     if allowed(user, "tickets") or "private_tickets" in user.permissions:
         clauses.append(Notification.ticket_id.in_(ticket_scope(user).with_only_columns(Ticket.id)))
-    return select(Notification).where(or_(*clauses) if clauses else False)
+    return select(Notification).where(or_(*clauses) if clauses else False).where(or_(Notification.recipient_user_id.is_(None), Notification.recipient_user_id == user.id))
 
 
 @router.get("/notifications")
@@ -47,7 +47,8 @@ def read_notification(id: UUID, user=Depends(current_user), db=Depends(get_db)):
     if not item:
         fail("not_found", "Notification not found.", 404)
     # Judge replies stay unread until their conversation is opened.
-    if item.kind != "judge_reply":
+    ticket_still_new = item.kind == "ticket" and item.ticket_id and db.get(Ticket, item.ticket_id).status == "new"
+    if item.kind != "judge_reply" and not ticket_still_new:
         item.read_at = now()
         db.commit()
     return {"ok": True}
@@ -152,16 +153,19 @@ def receive(data: IncomingEmail, user=Depends(require("campaigns")), db=Depends(
         possible = db.scalars(ticket_scope(user).where(Ticket.requester_email == address).order_by(Ticket.created_at.desc())).all()
         normalized = data.subject.removeprefix("Re: ").removeprefix("re: ").strip().casefold()
         ticket = next((t for t in possible if t.public_number in data.subject or t.subject.casefold() == normalized), None)
+        if ticket:
+            ticket = db.scalar(select(Ticket).where(Ticket.id == ticket.id).with_for_update().execution_options(populate_existing=True))
         if not ticket:
             number = db.scalar(select(ticket_sequence.next_value()))
-            committee = db.scalar(select(Committee).where(Committee.name == "Competitions"))
-            ticket = Ticket(public_number=f"MD-{number:06d}", requester_name=name, requester_email=address, subject=message.subject, committee_id=committee.id if committee else None, source="simulated_email", created_by=user.id)
+            ticket = Ticket(public_number=f"MD-{number:06d}", requester_name=name, requester_email=address, subject=message.subject, source="simulated_email", created_by=user.id)
             db.add(ticket)
             db.flush()
         else:
             ticket.last_message_at = now()
             ticket.status = "waiting_on_organizer"
-            ticket.resolved_at, ticket.closed_at = None, None
+            ticket.resolved_at, ticket.closed_at, ticket.auto_close_at = None, None, None
+            from .ticket_flow import changed
+            changed(db, ticket)
         message.ticket_id = ticket.id
         db.add(TicketMessage(ticket_id=ticket.id, message_type="requester_message", sender_name=name, sender_email=address, body=message.body, created_by=user.id))
         notify(db, "ticket", f"Ticket email: {name}", message.subject, f"/tickets/{ticket.id}", ticket_id=ticket.id)

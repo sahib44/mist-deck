@@ -50,7 +50,7 @@ export function useData<T = any>(path: string, enabled = true) {
     enabled,
     retry: false,
     refetchInterval:
-      ["/outbox", "/campaigns", "/notifications", "/conversations", "/competitions", "/judge-directory", "/dashboard"].some(prefix => path.startsWith(prefix))
+      ["/outbox", "/campaigns", "/notifications", "/conversations", "/competitions", "/judge-directory", "/dashboard", "/tickets"].some(prefix => path.startsWith(prefix))
         ? 3000
         : false,
   });
@@ -80,6 +80,7 @@ export function useAction() {
 const grants: Record<string, string[]> = {
   director: [
     "delete",
+    "ticket_approve",
     "judges",
     "imports",
     "campaigns",
@@ -100,12 +101,11 @@ const grants: Record<string, string[]> = {
     "catalogs",
     "outbox",
   ],
-  support_staff: ["tickets"],
 };
 for (const role of ["competitions_administrator", "competitions_member", "competitions_chair"]) {
   grants[role] = ["judges", "imports", "campaigns", "approve", "tickets", "catalogs", "outbox"];
 }
-grants.competitions_chair.push("delete");
+grants.competitions_chair.push("delete", "ticket_approve");
 export function can(user: User | undefined, permission: string) {
   return (
     !!user &&
@@ -117,7 +117,7 @@ export function can(user: User | undefined, permission: string) {
   );
 }
 export const label = (s: unknown) =>
-  String(s ?? "")
+  String(s === "waiting_on_organizer" ? "Awaiting organizer" : s ?? "")
     .replaceAll("_", " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 export const date = (s: string | undefined) =>

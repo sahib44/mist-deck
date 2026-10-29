@@ -27,8 +27,6 @@ erDiagram
   judge_contacts ||--o{ campaign_recipients : receives
   campaign_recipients ||--o| outbound_messages : queues
   outbound_messages ||--o{ outbound_messages : forwards
-  committees ||--o{ tickets : owns
-  users ||--o{ tickets : assigned
   tickets ||--o{ ticket_messages : conversation
   tickets ||--o{ ticket_internal_notes : private
   tickets ||--o{ outbound_messages : replies
@@ -122,3 +120,15 @@ and optionally to a competition/campaign; unknown senders link to tickets.
 `notifications` stores shared read state and one failure alert per outbound message.
 `directory_backups` retains the CSV and directory fingerprint used for a chair's
 password-confirmed clear. Saved-list storage was removed.
+
+Ticket assignment, committee, category and priority columns were removed in
+`d61f3b9720ac`. Existing assigned tickets become waiting-on-organizer conversations;
+tickets, public messages, notes and audit history remain. Support-staff accounts
+are disabled and their sessions are revoked.
+
+
+`e72a6c05f184` adds ticket context versions, private resolution summaries and
+auto-close deadlines. `ticket_drafts` stores immutable chair-reviewed snapshots;
+`ticket_actions` records idempotent atomic status/reply/note operations. Notifications
+may target one user and one draft. Private notes record their kind and optional
+request ID. Context changes supersede unconsumed approvals.

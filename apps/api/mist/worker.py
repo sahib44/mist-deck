@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Protocol
 from sqlalchemy import select, or_, and_
 from .db import SessionLocal, now
-from .models import Outbound, Recipient, Campaign, Judge, PilotNomination
+from .models import Outbound, Recipient, Campaign, Judge, PilotNomination, Ticket, TicketMessage
 from .services import contact_email, audit
 
 log = logging.getLogger("mist.worker")
@@ -74,6 +74,7 @@ def deliver(db, id, worker_id):
     initial = db.get(Outbound, id)
     if not initial:
         return
+    ticket = db.scalar(select(Ticket).where(Ticket.id == initial.related_ticket_id).with_for_update()) if initial.related_ticket_id else None
     campaign, rec = None, None
     if initial.related_campaign_recipient_id:
         rec = db.get(Recipient, initial.related_campaign_recipient_id)
@@ -104,6 +105,8 @@ def deliver(db, id, worker_id):
         try:
             msg.provider_message_id = MockEmailProvider().send(msg)
             msg.status, msg.completed_at, msg.last_error = "sent", now(), ""
+            if ticket and ticket.status in {"waiting_on_requester", "resolved"} and db.scalar(select(TicketMessage.id).where(TicketMessage.outbound_message_id == msg.id, TicketMessage.message_type == "staff_reply")):
+                ticket.auto_close_at = now() + timedelta(days=7)
             if rec:
                 rec.status, rec.sent_at = "sent", now()
                 if judge and campaign.pilot_competition_id:
@@ -162,10 +165,13 @@ def deliver(db, id, worker_id):
 
 
 def run_once(worker_id="manual-worker"):
+    from .ticket_flow import close_idle_tickets
+    with SessionLocal() as db:
+        closed = close_idle_tickets(db)
     with SessionLocal() as db:
         id = claim(db, worker_id)
     if not id:
-        return False
+        return bool(closed)
     with SessionLocal() as db:
         deliver(db, id, worker_id)
     return True

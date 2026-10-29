@@ -95,3 +95,19 @@ permanent competitions, two warning flags plus password and fresh CSV backup,
 retained message snapshots after clearing, direct recipient deduplication, exact
 failed-recipient alerts, incoming email idempotency, nonjudge ticket routing,
 competition-specific unread markers, and read-cursor protection for later replies.
+
+
+Simplified ticket checks: sender/name/subject/body only, no assignment or priority
+API fields, shared competitions visibility, retired support login rejection,
+public-message forwarding that excludes internal notes, and yellow note outlines
+with matching conversation backgrounds in both themes.
+
+
+Ticket status/review scenarios cover newest-first notes across pagination, New
+notifications remaining unread until triage, required replies/private notes, private
+resolution summaries, no separate Responded status, the corrected Needs a reply
+queue, chair-only immutable approvals and targeted notifications, final send by the
+head, edited/stale draft rejection, idempotent retries, blocked approval bypasses,
+seven-day closure only for waiting/resolved tickets, failed delivery without a
+closure deadline, reopening on incoming email, draft persistence through outbox
+navigation, and the shield callout's adjacent left-aligned text.

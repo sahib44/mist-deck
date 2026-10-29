@@ -20,7 +20,6 @@ def seed(db):
         ("tech", "technology_administrator", "Demo Technology"),
         ("competitions", "competitions_member", "Competition Heads"),
         ("chair", "competitions_chair", "Competitions Chair"),
-        ("support", "support_staff", "Demo Support"),
     ]:
         db.add(
             User(
@@ -61,6 +60,9 @@ def account_password(role):
 
 def seed_competition_accounts(db, rotate_passwords=False):
     password = os.environ["SEED_PASSWORD"]
+    for legacy in db.scalars(select(User).where(User.role.not_in(["director", "technology_administrator", "competitions_administrator", "competitions_chair", "competitions_member"]))):
+        legacy.is_active = False
+        db.execute(delete(Session).where(Session.user_id == legacy.id))
     for email, role, name in [("chair@example.com", "competitions_chair", "Competitions Chair"), ("competitions@example.com", "competitions_member", "Competition Heads")]:
         user = db.scalar(select(User).where(User.email == email))
         if user:

@@ -168,7 +168,7 @@ def test_clear_rejects_stale_backup_when_directory_changes(director):
     assert ok(director.get("/api/judges"))["total"] > 0
 
 
-def test_private_ticket_notifications_do_not_leak_to_heads_or_tech(director):
+def test_shared_ticket_notifications_visible_to_heads_and_restricted_for_tech(director):
     ticket = ok(director.post("/api/tickets", json={"requester_name": "Private Requester", "requester_email": "private@example.org", "subject": "Private general ticket", "body": "For directors only."}))
     ok(director.post(f"/api/tickets/{ticket['id']}/messages", json={"body": "Private reply", "request_id": str(uuid4())}))
     with SessionLocal() as db:
@@ -182,19 +182,19 @@ def test_private_ticket_notifications_do_not_leak_to_heads_or_tech(director):
             db.commit()
         while run_once("private-failure"):
             pass
-    assert ok(director.get("/api/notifications"))["unread_count"] == 2
+    assert ok(director.get("/api/notifications"))["unread_count"] == 1
     sign_in(director, "competitions")
-    assert ok(director.get("/api/notifications"))["items"] == []
+    assert ok(director.get("/api/notifications"))["unread_count"] == 1
     sign_in(director, "tech")
     assert ok(director.get("/api/notifications"))["items"] == []
 
 
-def test_nonjudge_reply_cannot_append_to_ticket_outside_members_scope(director):
+def test_nonjudge_reply_joins_the_shared_competitions_ticket(director):
     private = ok(director.post("/api/tickets", json={"requester_name": "Private", "requester_email": "same-sender@example.org", "subject": "Private question", "body": "Director only"}))
     sign_in(director, "competitions")
     received = receive(director, "same-sender@example.org", subject="Re: Private question")
-    assert received["ticket_id"] != private["id"]
-    assert director.get(f"/api/tickets/{private['id']}").status_code == 404
+    assert received["ticket_id"] == private["id"]
+    assert ok(director.get(f"/api/tickets/{private['id']}/messages"))["total"] == 2
     assert director.get(f"/api/tickets/{received['ticket_id']}").status_code == 200
 
 

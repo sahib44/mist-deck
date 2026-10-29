@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ImportSteps, validateMapping, MergeFields } from "./Imports";
 import { RecipientPreview } from "./Campaigns";
-import { ReplyComposer } from "./Tickets";
+import { ReplyComposer, TicketComposerState } from "./Tickets";
 import { can, User } from "./api";
 import { RecipientChips } from "./Recipients";
 import { Loading, ErrorBox } from "./ui";
@@ -74,7 +75,11 @@ describe("campaign preview", () => {
 describe("ticket composers", () => {
   it("keeps public and private text and send actions separate", async () => {
     const send = vi.fn().mockResolvedValue(undefined);
-    render(<ReplyComposer onSend={send} pending={false} error={null} />);
+    function ComposerHarness() {
+      const [draft, setDraft] = useState<TicketComposerState>({ mode: "messages", reply: "", note: "", resolution_note: "", target_status: "" });
+      return <ReplyComposer draft={draft} onChange={setDraft} changingStatus={false} onSend={() => send(draft.mode, draft.mode === "messages" ? draft.reply : draft.note)} pending={false} error={null} />;
+    }
+    render(<ComposerHarness />);
     fireEvent.change(screen.getByLabelText("Public reply body"), {
       target: { value: "Public answer" },
     });
@@ -102,11 +107,11 @@ describe("ticket composers", () => {
   });
 });
 describe("permissions and request feedback", () => {
-  it("does not grant support import or campaign approval controls", () => {
+  it("does not grant a retired support role access", () => {
     const user = { role: "support_staff", permissions: [] } as unknown as User;
     expect(can(user, "imports")).toBe(false);
     expect(can(user, "approve")).toBe(false);
-    expect(can(user, "tickets")).toBe(true);
+    expect(can(user, "tickets")).toBe(false);
     expect(
       can(
         {
@@ -149,5 +154,23 @@ describe("team permissions and recipients", () => {
     expect(screen.getByText("Second Judge")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Remove First Judge" }));
     expect(change).toHaveBeenCalledWith([recipients[1]]);
+  });
+});
+
+
+describe("ticket status requirements", () => {
+  it("marks a waiting-on-requester reply required and blocks sending without approval", () => {
+    const state: TicketComposerState = { mode: "messages", reply: "Please provide more information.", note: "", resolution_note: "", target_status: "waiting_on_requester" };
+    const view = render(<ReplyComposer draft={state} onChange={vi.fn()} changingStatus pending={false} error={null} needsApproval approved={false} onSend={vi.fn()} onRequestApproval={vi.fn()} />);
+    expect(screen.getByLabelText("Public reply body")).toBeRequired();
+    expect(screen.getByRole("button", { name: "Update status and send reply" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Request chair approval" })).toBeEnabled();
+    view.rerender(<ReplyComposer draft={state} onChange={vi.fn()} changingStatus pending={false} error={null} needsApproval approved onSend={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Update status and send reply" })).toBeEnabled();
+  });
+  it("requires a private resolution note and keeps the requester reply optional", () => {
+    render(<ReplyComposer draft={{ mode: "messages", reply: "", note: "", resolution_note: "Solved with the rules team.", target_status: "resolved" }} onChange={vi.fn()} changingStatus pending={false} error={null} onSend={vi.fn()} />);
+    expect(screen.getByLabelText("Resolution note")).toBeRequired();
+    expect(screen.getByLabelText("Public reply body")).not.toBeRequired();
   });
 });

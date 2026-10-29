@@ -93,7 +93,7 @@ export function Dashboard() {
         <section className="overview-section" aria-labelledby="ticket-overview-heading">
           <div className="section-heading">
             <h2 id="ticket-overview-heading">Competitions tickets</h2>
-            {can(user, "tickets") && user?.role !== "support_staff" && (
+            {can(user, "tickets") && (
               <Link className="button" to="/tickets/new">
                 <Plus size={16} /> New ticket
               </Link>

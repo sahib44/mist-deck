@@ -4,9 +4,9 @@ Revalidated locally on 2026-10-27 with Docker Desktop (Linux ARM64 containers).
 
 | Check | Result |
 | --- | --- |
-| PostgreSQL backend unit/integration tests | **41 passed** |
-| Frontend Vitest / React Testing Library | **9 passed** |
-| Playwright organizer journeys | **4 passed**, including recipient chips, judge reply alerts, notification navigation, member/chair permissions, and password-confirmed directory clearing |
+| PostgreSQL backend unit/integration tests | **53 passed** |
+| Frontend Vitest / React Testing Library | **11 passed** |
+| Playwright organizer journeys | **5 passed**, including recipient chips, judge reply alerts, notification navigation, member/chair permissions, and password-confirmed directory clearing |
 | TypeScript strict compilation | Passed |
 | Vite production build | Passed |
 | Docker Compose build and startup | Passed |
@@ -18,7 +18,7 @@ Revalidated locally on 2026-10-27 with Docker Desktop (Linux ARM64 containers).
 The full browser run imported the fabricated duplicate CSV, resolved exact and
 possible matches, committed 2 new / 6 updated / 2 skipped rows, selected directory
 judges, reviewed recipient exclusions, previewed and approved individual messages, and
-observed sandbox delivery. It then created and assigned a ticket, verified that a
+observed sandbox delivery. It then created a shared ticket, verified that a
 private note produced no outbound message, sent a public sandbox reply, resolved
 the ticket, signed out, signed in as director, and inspected the audit trail.
 
@@ -62,3 +62,21 @@ The main local workspace was separately backed up and reset at the user's explic
 request after these tests. Accounts and competition definitions were retained;
 judges, imports, campaigns, outbound/inbound messages, tickets and notifications
 were cleared. Private snapshots and test credentials are Git-ignored.
+
+
+The simplified ticket journey verifies the four-field incoming-email form, absence
+of assignment/committee/category/priority controls, shared team visibility, and
+forwarding of only public content. Browser checks compare note-panel and textarea
+backgrounds to the normal conversation surface and verify yellow inner/outer
+borders in both light and dark themes.
+
+
+The status-review browser journey marks a new ticket In progress, verifies its
+notification clears, checks its presence in Needs a reply, saves notes newest
+first, chooses Waiting on requester, verifies the required public reply and blocked
+status action, preserves that draft through outbox/Back navigation, requests chair
+approval, follows the chair's notification to approve, returns via the head's
+approval notification, and makes the final send. It then records the required
+Awaiting organizer note and resolves with a private resolution note and no email.
+Backend clock-controlled checks cover seven-day auto-closure and incoming replies
+reopening tickets without closing untouched work.

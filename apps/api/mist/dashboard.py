@@ -76,11 +76,6 @@ def dashboard(user=Depends(current_user), db=Depends(get_db)):
         opened = scoped.where(Ticket.status.not_in(["resolved", "closed"]))
         metric("Open tickets", opened, "/tickets?view=open")
         metric(
-            "Unassigned tickets",
-            opened.where(Ticket.assigned_user_id.is_(None)),
-            "/tickets?view=unassigned",
-        )
-        metric(
             "Overdue tickets",
             opened.where(Ticket.last_message_at < now() - timedelta(days=3)),
             "/tickets?view=overdue",
@@ -92,15 +87,6 @@ def dashboard(user=Depends(current_user), db=Depends(get_db)):
                 select(Ticket.status, func.count())
                 .where(Ticket.id.in_(ids))
                 .group_by(Ticket.status)
-            )
-        ]
-        groups["Tickets by committee"] = [
-            {"label": name, "value": count, "link": f"/tickets?committee_id={id}"}
-            for id, name, count in db.execute(
-                select(Committee.id, Committee.name, func.count())
-                .join(Ticket)
-                .where(Ticket.id.in_(ids))
-                .group_by(Committee.id, Committee.name)
             )
         ]
     recent = []

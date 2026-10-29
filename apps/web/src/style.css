@@ -1202,16 +1202,17 @@ dd {
   font-size: 0.8rem;
 }
 .composer.private {
-  background: #fffbef;
-  border-color: #e7dfbe;
+  background: var(--surface);
+  border-color: var(--note-outline);
 }
 .private-notes {
-  background: #fffcf3;
+  background: var(--surface);
+  border: 1px solid var(--note-outline);
   border-radius: 6px;
   padding: 8px 15px;
 }
 .private-notes article {
-  border-bottom: 1px solid #ece5ce;
+  border-bottom: 1px solid var(--note-outline);
   padding: 12px 0;
 }
 .private-notes article:last-child {
@@ -1772,3 +1773,45 @@ dialog::backdrop { background: #120a20a8; }
 [data-theme="dark"] .conversation-row.unread { color: #ff8798; border-color: #ff8798; }
 @keyframes opened-message { from { box-shadow: 0 0 0 2px #e55b72; } to { box-shadow: none; } }
 @media (max-width: 760px) { .conversation-row { flex-wrap: wrap; } .topbar .notification-button { font-size: 0; } .topbar .notification-count { font-size: .7rem; } }
+
+/* Private notes share the conversation surface; yellow is reserved for outlines. */
+:root { --note-outline: #b48a12; }
+:root[data-theme="dark"] { --note-outline: #e3bd45; }
+.composer.private, .panel.private-notes-panel { background: var(--surface); color: var(--text); border-color: var(--note-outline); }
+.composer.private textarea { background: var(--surface); color: var(--text); border-color: var(--note-outline); }
+.composer.private textarea:focus { border-color: var(--note-outline); box-shadow: 0 0 0 2px color-mix(in srgb, var(--note-outline) 25%, transparent); outline-color: var(--note-outline); }
+.composer.private .tabs, .composer.private .tabs .active, .private-notes-panel > header { border-color: var(--note-outline); }
+.composer.private .tabs .active { color: var(--text); background: transparent; }
+.private-notes-panel .private-notes { background: var(--surface); color: var(--text); border-color: var(--note-outline); }
+.private-notes-panel .message-body { color: var(--text); }
+.ticket-message-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-left: 44px; }
+@media (max-width: 1100px) {
+  .ticket-layout { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Ticket status requirements and draft review. */
+:root { --reply-outline: #b42338; }
+:root[data-theme="dark"] { --reply-outline: #ff8798; }
+.composer.reply-required, .composer.reply-required textarea, .composer.reply-required .tabs { border-color: var(--reply-outline); }
+.composer.reply-required textarea:focus { outline-color: var(--reply-outline); border-color: var(--reply-outline); box-shadow: 0 0 0 2px color-mix(in srgb, var(--reply-outline) 25%, transparent); }
+.composer-topline { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: .75rem; margin-bottom: .6rem; }
+.composer-topline .tabs { flex: 1 1 260px; min-width: 0; margin-bottom: 0; }
+.chair-approval-button { margin-left: auto; font-size: .76rem; }
+.resolution-note-input { border-color: var(--note-outline); background: var(--surface); }
+.approval-hint { color: var(--muted); }
+.approval-ready { border: 1px solid var(--focus); border-radius: 8px; padding: .6rem; }
+.ticket-review { border: 1px solid var(--border); border-radius: 10px; padding: 1rem; margin-bottom: .75rem; }
+.ticket-review:last-child { margin-bottom: 0; }
+.highlighted-review { border-color: var(--accent); }
+.ticket-review > small { display: block; color: var(--muted); margin: .4rem 0; }
+.review-resolution { border-left: 3px solid var(--note-outline); padding-left: .8rem; margin: .75rem 0; }
+.ticket-message-actions { justify-content: flex-end; margin-left: 44px; }
+.ticket-message-actions .caption { margin-right: auto; }
+.ticket-message-actions .ticket-forward { padding: .35rem .55rem; font-size: .73rem; min-height: 30px; }
+.outbox-reassurance { justify-content: flex-start; gap: .75rem; flex-wrap: nowrap; }
+.outbox-reassurance > svg { flex: 0 0 auto; }
+.outbox-reassurance > p { margin: 0; flex: 1; text-align: left; }
+.history-back { gap: .3rem; padding: .45rem .6rem; }
+@media (max-width: 1150px) { .history-back span { display: none; } }
+
+.resolution-note-input:focus { outline-color: var(--note-outline); border-color: var(--note-outline); }

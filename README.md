@@ -44,7 +44,7 @@ retained. No public deployment is configured.
 
 ## Development accounts
 
-The five fabricated development accounts use `SEED_PASSWORD` in your local `.env`
+The four fabricated development accounts use `SEED_PASSWORD` in your local `.env`
 file unless separate chair/member passwords are configured:
 
 | Email | Role | Additional permissions |
@@ -53,7 +53,6 @@ file unless separate chair/member passwords are configured:
 | `tech@example.com` | Technology Administrator | Imports, catalogs, job troubleshooting, audit; no private tickets |
 | `chair@example.com` | Competitions Chair | Everyday competition tools, approvals, pilot deletion, backed-up directory clearing |
 | `competitions@example.com` | Shared Competition Heads | Everyday competition tools and approvals; no deletion |
-| `support@example.com` | Support Staff | Assigned tickets only |
 
 Passwords are stored as Argon2id hashes. Login creates a random, 12-hour HttpOnly,
 SameSite=Strict cookie; only its SHA-256 digest is stored. Mutation requests require
@@ -111,8 +110,8 @@ the working workflows.
    Each recipient appears as a removable name chip. Preview, submit, approve and queue.
 8. Watch separate messages appear in Sandbox outbox. No message has multiple
    recipients. The worker runs automatically.
-9. Create a simulated ticket, choose a category, and assign Demo Support. Add an
-   internal note and a public sandbox reply using their separate composers.
+9. Create a simulated ticket with a sender name, email, subject and message. Add
+   an internal note and public reply, or forward the email to another address.
 10. Resolve the ticket. Sign in as director to inspect the audit trail.
 
 A director may cancel any nonterminal campaign, including queued/sending work;
@@ -325,7 +324,7 @@ not evidence of external deliverability.
 
 ## Verified local build
 
-The final run passed **41 backend tests, 9 frontend tests, and 4 Playwright
+The final run passed **53 backend tests, 11 frontend tests, and 5 Playwright
 scenarios**, plus TypeScript compilation, Docker startup and Alembic consistency.
 See [validation details](docs/validation.md) and the
 [requirements map](docs/requirements-matrix.md).
@@ -362,3 +361,52 @@ recipient ID to disambiguate a thread. Real mailbox synchronization and real
 delivery require a future provider integration.
 
 Saved lists and the former contact-tools screen have been removed.
+
+
+Tickets form one shared competitions mailbox. There are no ticket committees,
+categories, assignees or priorities. Keep a simple conversation status, reply, add
+private team notes or forward a public message to any valid address. Forwarding
+includes only that public message and the optional forwarding note; internal notes
+are never included. Internal-note composers and saved notes use the normal surface
+with yellow outlines in both themes. The former support-staff login is retired;
+active roles are directors, technology and the competitions team.
+
+
+## Ticket status and chair review
+
+| Status | Required input | Inactivity closure |
+| --- | --- | --- |
+| New | None; its notification stays unread until the status changes | None |
+| In progress | None | None |
+| Awaiting organizer | Internal note explaining the team's next step | None |
+| Waiting on requester | Public reply; heads need chair approval first | Seven days after successful sandbox delivery |
+| Resolved | Private resolution note; a requester reply is optional and requires approval when supplied by a head | Seven days without a requester reply |
+| Closed | Reopen as In progress or Awaiting organizer to continue | Already closed |
+
+“Awaiting organizer” means the competitions team owes the next action. “Needs a
+reply” includes New, In progress and Awaiting organizer. There is no separate
+Responded status. New private notes and resolution notes appear first.
+
+The reply composer and the ticket's Update status button submit the same atomic
+status/reply/note operation for the required-input statuses. Public replies required
+by Waiting on requester have red outlines and an asterisk. Resolution notes remain
+private and never enter the outgoing email. A status change cannot save without
+its required content. In progress can be selected independently of an unsent draft.
+
+Heads use Request chair approval at the right of the composer to submit an immutable
+reply or private-note snapshot. Only a chair or director can approve it. The chair
+gets a targeted notification linking to the ticket and draft; approval sends a
+targeted notification to the requesting head. Approval itself sends no email. The
+head reviews the approved draft and makes the final send or save. Changed text,
+resolution notes, status or ticket context require a fresh approval. A request ID
+prevents a retry from creating duplicate status changes or replies.
+
+The worker checks inactivity deadlines. Only Waiting on requester and Resolved
+tickets auto-close; New, In progress and Awaiting organizer tickets stay open. A
+failed required reply does not start a closure timer. Incoming requester replies
+reopen the ticket as Awaiting organizer and clear its old deadline. The worker
+applies any overdue deadlines when the local app is started again.
+
+Use the top-bar Back button to return to the previous in-app page, including from a
+ticket's filtered outbox. Unsent ticket text is retained in the current browser
+session, separately for each signed-in account and ticket.

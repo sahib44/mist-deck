@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import path from "node:path";
 
 test("organizer imports, reviews, campaigns, and resolves a support ticket", async ({
-  page,
+  page, playwright, baseURL,
 }) => {
   page.on("dialog", (dialog) => dialog.accept());
   const stamp = Date.now();
@@ -163,24 +163,18 @@ test("organizer imports, reviews, campaigns, and resolves a support ticket", asy
   await page
     .getByLabel("Message body", { exact: true })
     .fill("May I update my fabricated arts entry?");
-  await page
-    .getByLabel("Category", { exact: true })
-    .selectOption({ label: "Visual Arts" });
+  for (const field of ["Category", "Committee", "Priority"]) {
+    await expect(page.getByLabel(field, { exact: true })).toHaveCount(0);
+  }
   await page.getByRole("button", { name: "Create simulated ticket" }).click();
   await expect(
     page.getByRole("heading", { name: "Arts submission question " + stamp }),
   ).toBeVisible();
   const ticketId = page.url().split("/tickets/")[1];
-  await page
-    .getByLabel("Assigned organizer")
-    .selectOption({ label: "Demo Support" });
-  await page.getByRole("button", { name: "Save assignment" }).click();
-  await expect
-    .poll(async () => {
-      const r = await page.request.get("/api/tickets/" + ticketId);
-      return (await r.json()).status;
-    })
-    .toBe("assigned");
+  for (const field of ["Assigned organizer", "Competition category", "Committee", "Ticket priority"]) {
+    await expect(page.getByLabel(field, { exact: true })).toHaveCount(0);
+  }
+  await expect(page.getByRole("button", { name: "Save assignment" })).toHaveCount(0);
   await page
     .getByRole("button", { name: "Internal note", exact: true })
     .click();
@@ -193,6 +187,17 @@ test("organizer imports, reviews, campaigns, and resolves a support ticket", asy
   await expect(page.locator(".private-notes")).toContainText(
     "Private: organizer review completed.",
   );
+  for (const theme of ["light", "dark"]) {
+    if (theme === "dark") await page.getByRole("button", { name: "Switch to dark mode" }).click();
+    const surface = await page.locator(".ticket-layout .panel").first().evaluate(element => getComputedStyle(element).backgroundColor);
+    for (const selector of [".composer.private", ".composer.private textarea", ".private-notes-panel", ".private-notes"]) {
+      await expect.poll(() => page.locator(selector).evaluate(element => getComputedStyle(element).backgroundColor)).toBe(surface);
+      await expect.poll(() => page.locator(selector).evaluate(element => getComputedStyle(element).borderTopColor)).toBe(theme === "dark" ? "rgb(227, 189, 69)" : "rgb(180, 138, 18)");
+    }
+    await page.screenshot({ path: `test-results/internal-notes-${theme}.png`, fullPage: true });
+  }
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+
   expect(
     (await (await page.request.get("/api/outbox?ticket_id=" + ticketId)).json())
       .total,
@@ -201,6 +206,16 @@ test("organizer imports, reviews, campaigns, and resolves a support ticket", asy
   await page
     .getByLabel("Public reply body")
     .fill("Yes, your fabricated entry may be updated.");
+  await expect(page.getByRole("button", { name: "Send public sandbox reply" })).toBeDisabled();
+  await page.getByRole("button", { name: "Request chair approval", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Awaiting chair approval", exact: true })).toBeVisible();
+  const draft = (await (await page.request.get(`/api/tickets/${ticketId}/drafts`)).json()).items[0];
+  const chairApi = await playwright.request.newContext({ baseURL });
+  await chairApi.post("/api/auth/login", { data: { email: "chair@example.com", password: process.env.SEED_PASSWORD } });
+  const approval = await chairApi.post(`/api/tickets/${ticketId}/drafts/${draft.id}/approve`, { headers: { "X-MIST-Request": "1" } });
+  expect(approval.ok()).toBe(true);
+  await chairApi.dispose();
+  await expect(page.getByRole("button", { name: "Send public sandbox reply" })).toBeEnabled();
   await page.getByRole("button", { name: "Send public sandbox reply" }).click();
   await expect(page.locator(".conversation.staff_reply")).toContainText(
     "Yes, your fabricated entry may be updated.",
@@ -216,10 +231,20 @@ test("organizer imports, reviews, campaigns, and resolves a support ticket", asy
   await page
     .getByLabel("Ticket status", { exact: true })
     .selectOption("resolved");
-  await page.getByRole("button", { name: "Update status" }).click();
+  await expect(page.getByRole("button", { name: "Update status", exact: true }).last()).toBeDisabled();
+  await page.getByLabel("Resolution note", { exact: true }).fill("Confirmed the submission can be updated.");
+  await page.locator("aside").getByRole("button", { name: "Update status", exact: true }).click();
   await expect(
     page.locator(".page-heading .badge").filter({ hasText: "Resolved" }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Forward email", exact: true }).first().click();
+  await page.getByLabel("Forward to", { exact: true }).fill("registration@example.org");
+  await page.getByLabel("Note (optional)").fill("Please review this question.");
+  await page.getByRole("button", { name: "Queue sandbox forward", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Forward queued" })).toBeVisible();
+  const forwarded = (await (await page.request.get(`/api/outbox?ticket_id=${ticketId}&q=registration`)).json()).items[0];
+  expect(forwarded.body_text).toContain("May I update my fabricated arts entry?");
+  expect(forwarded.body_text).not.toContain("Private: organizer review completed.");
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
   await login("director@example.com");

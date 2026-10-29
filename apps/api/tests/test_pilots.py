@@ -91,7 +91,7 @@ def test_pilot_folder_judges_documents_filters_and_individual_mock_messages(dire
 def test_pilot_documents_and_contacts_require_judge_access(client):
     import os
     ok(client.post("/api/auth/login", json={
-        "email": "support@example.com", "password": os.environ["SEED_PASSWORD"]
+        "email": "tech@example.com", "password": os.environ["SEED_PASSWORD"]
     }))
     assert client.get("/api/competitions").status_code == 403
     assert client.post("/api/competitions", data={"name": "Private", "event_year": "2027", "category_slug": "group-projects"}).status_code == 403
